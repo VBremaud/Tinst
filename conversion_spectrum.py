@@ -73,4 +73,5 @@ def conversion_from_spectrator_to_txt(sim,fileday):
 
             fichier.close()
 
-conversion_from_spectrator_to_txt(True,"/home/tp-home005/vbremau/StageM1/data_30may17_A2=0.05")
+#conversion_from_spectrator_to_txt(True,"/home/tp-home005/vbremau/StageM1/data_30may17_A2=0.05")
+conversion_from_spectrator_to_txt(True,"/data_30may17_A2=0")

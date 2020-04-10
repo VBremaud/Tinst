@@ -231,11 +231,19 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
         INTENSITE_OBS=smooth(INTENSITE_OBS,45,'flat',1)
         INTENSITE_OBSS=[]
 
+        c=0
         for i in range(len(INTENSITE_OBS)):
+            if max(INTENSITE_OBS[i],Intensite_obs[i])==Intensite_obs[i]:
+                c+=1
+            else:
+                if 17>c>1:
+                    INTENSITE_OBSS[-c:]=INTENSITE_OBS[i-c:i]
+                c=0
+
             INTENSITE_OBSS.append(max(INTENSITE_OBS[i],Intensite_obs[i]))
 
-        INTENSITE_OBS=smooth(INTENSITE_OBSS,45,'flat',1)
-        INTENSITE_OBSS=sp.signal.savgol_filter(INTENSITE_OBSS,filtre1_window*2-1,filtre1_order)
+        INTENSITE_OBS=smooth(INTENSITE_OBSS,95,'flat',1)
+        INTENSITE_OBSS=sp.signal.savgol_filter(INTENSITE_OBSS,filtre1_window*3,filtre1_order)
 
 
     fig=plt.figure(figsize=[15,10])
@@ -274,4 +282,3 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
     plt.grid(True)
 
     plt.show()
-

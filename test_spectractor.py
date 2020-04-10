@@ -1,5 +1,5 @@
 "Importation des librairies"
-
+from astropy.io import fits
 import os
 import matplotlib.pyplot as plt
 import numpy as np
@@ -21,10 +21,12 @@ startest="/home/tp-home005/vbremau/StageM1/auxtel_first_light-1_spectrum.fits"
 """
 #HD107696
 
-startest="/home/tp-home005/vbremau/StageM1/sim_20170530_175_spectrum.fits"
+startest="/home/tp-home005/vbremau/StageM1/data_30may17_A2=0/sim_20170530_175_spectrum.fits"
 
 s=Spectrum(startest)
-airmass=s.airmass
+#airmass=s.AIRMASS
+hdu=fits.open(startest)
+airmass=hdu[0].header["AIRMASS"]
 disperseur=s.disperser_label
 star=s.header['TARGET']
 lambda_obs=s.lambdas
@@ -33,10 +35,11 @@ intensite_err=s.err
 lambda_reel=s.target.wavelengths[0]
 intensite_reel=s.target.spectra[0]
 
+print(lambda_reel,intensite_reel)
 fig=plt.figure(figsize=[15,10])
 plt.plot(lambda_reel,intensite_reel,c='red')
-plt.plot(lambda_obs,intensite_obs,c='blue')
-plt.axis([300,1100,min(intensite_obs)*1.1,max(intensite_obs)*1.1])
+#plt.plot(lambda_obs,intensite_obs,c='blue')
+#plt.axis([300,1100,min(intensite_obs)*1.1,max(intensite_obs)*1.1])
 plt.xlabel('$\lambda$ (nm)',fontsize=20)
 plt.ylabel('intensity',fontsize=20)
 plt.title("Spectre test",fontsize=20)

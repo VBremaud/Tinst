@@ -86,7 +86,19 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
     "Recuperation des donnees du fichier spectre"
 
     intensite_obs_savgol=sp.signal.savgol_filter(intensite_obs,11,filtre1_order) #filtre savgol (enlève le bruit)
-    intensite_obs_1=sp.interpolate.interp1d(lambda_obs,intensite_obs_savgol,kind='cubic')
+    intensite_obs_moy=smooth(intensite_obs,50,'flat',1)
+
+    intensite_obs_1=(intensite_obs_savgol+intensite_obs_moy)/2
+    j=0
+    for i in range(len(intensite_obs_1)):
+        if lambda_obs[i]>475:
+            j=i
+            break
+
+    intensite_obs_1[j:]=intensite_obs_savgol[j:]
+
+    #intensite_obs_1=intensite_obs_savgol
+    intensite_obs_1=sp.interpolate.interp1d(lambda_obs,intensite_obs_1,kind='cubic')
 
     lambda_complet=np.linspace(lambda_obs[0],lambda_obs[-1],int((lambda_obs[-1]-lambda_obs[0])*10+1)) #précison Angtrom
     Intensite_obs=intensite_obs_1(lambda_complet)
@@ -133,9 +145,9 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
 
     INTENSITE_OBS=intensite_obss
 
-    INTENSITE_OBS=smooth(INTENSITE_OBS,155,'flat',1)
+    INTENSITE_OBS=smooth(INTENSITE_OBS,10,'flat',1)
     INTENSITE_OBSS=INTENSITE_OBS
-    INTENSITE_OBSS=sp.signal.savgol_filter(INTENSITE_OBS,filtre1_window*3,filtre1_order)
+    INTENSITE_OBSS=sp.signal.savgol_filter(INTENSITE_OBS,filtre1_window*1,filtre1_order)
 
 
     fig=plt.figure(figsize=[15,10])
@@ -148,3 +160,4 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
     plt.grid(True)
 
     plt.show()
+
