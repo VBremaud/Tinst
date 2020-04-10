@@ -14,31 +14,44 @@ import gc
 import sys
 import glob
 import statistics as sc
+from astropy.io import fits
 
-def convertion_from_spectrator_to_txt(sim,fileday):
+def conversion_from_spectrator_to_txt(sim,fileday):
     if sim:
         list_spectrums=glob.glob(fileday+"/sim*spectrum*.fits")
+        list2=glob.glob(fileday+"/sim*spectrum*.txt")
         """liste des chemins contenu dans le fichier du jour à étudier en cherchant uniquement ceux qui proviennent
         des simulations du CTIO et qui sont des spectres"""
 
     else:
         list_spectrums=glob.glob(fileday+"/reduc*spectrum*.fits")
+        list2=glob.glob(fileday+"/reduc*spectrum*.txt")
         """liste des chemins contenu dans le fichier du jour à étudier en cherchant uniquement ceux qui proviennent
         des mesures du CTIO et qui sont des spectres"""
+    list3=[]
 
     for i in range(len(list_spectrums)): #on peut divisier pour aller plus vite
-        startest=list_spectrums[i]
-        s=Spectrum(startest)
-        airmass=s.airmass
+        A=list_spectrums[i][:len(list_spectrums[i])-4]+"txt"
+        if A in list2:
+            continue
+        else:
+            list3.append(list_spectrums[i])
 
-        print(list_spectrums[i][:len(list_spectrums[i])-4])
+    for i in range(len(list3)):
+
+        startest=list3[i]
+        s=Spectrum(startest)
+        hdu=fits.open(startest)
+        airmass=hdu[0].header["AIRMASS"]
+
+        print(list3[i][:len(list3[i])-4])
         disperseur=s.disperser_label
         star=s.header['TARGET']
         lambda_obs=s.lambdas
         intensite_obs=s.data
         intensite_err=s.err
         if s.target.wavelengths==[]:
-            fichier=open(list_spectrums[i][:len(list_spectrums[i])-5]+'.txt','w')
+            fichier=open(list3[i][:len(list3[i])-5]+'.txt','w')
 
             fichier.write('#'+'\t'+star+'\t'+disperseur+'\t'+str(airmass)+'\t'+'\n')
             for j in range(len(lambda_obs)):
@@ -49,7 +62,7 @@ def convertion_from_spectrator_to_txt(sim,fileday):
             lambda_reel=s.target.wavelengths[0]
             intensite_reel=s.target.spectra[0]
 
-            fichier=open(list_spectrums[i][:len(list_spectrums[i])-5]+'.txt','w')
+            fichier=open(list3[i][:len(list3[i])-5]+'.txt','w')
 
             fichier.write('#'+'\t'+star+'\t'+disperseur+'\t'+str(airmass)+'\t'+'\n')
             for j in range(len(lambda_reel)):
@@ -60,4 +73,4 @@ def convertion_from_spectrator_to_txt(sim,fileday):
 
             fichier.close()
 
-#convertision_from_spectrator_to_txt(True,"/home/tp-home005/vbremau/StageM1/extraction_test")
+conversion_from_spectrator_to_txt(True,"/home/tp-home005/vbremau/StageM1/data_30may17_A2=0.05")

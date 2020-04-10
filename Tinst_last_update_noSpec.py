@@ -6,13 +6,6 @@ import matplotlib.pyplot as plt #affichage
 import numpy as np #calculs utilisant C
 import glob
 #A importer
-"""
-from spectractor.extractor.spectrum import Spectrum #importation des spectres
-from spectractor.tools import from_lambda_to_colormap #couleurs des longueurs d'ondes
-from spectractor.tools import wavelength_to_rgb #couleurs des longueurs d'ondes
-from spectractor.simulation.simulator import AtmosphereGrid # grille d'atmosphère
-"""
-#CHECK SUR L'ORDI DU MAGISTERE
 
 from scipy import signal #filtre savgol pour enlever le bruit
 from scipy.interpolate import interp1d #interpolation
@@ -21,6 +14,7 @@ import scipy as sp #calculs
 import statistics as sc #statistiques
 
 ## Convolution
+
 
 def smooth(x,window_len,window,sigma):
     """
@@ -38,7 +32,7 @@ def smooth(x,window_len,window,sigma):
     s=np.r_[x[window_len-1:0:-1],x,x[-2:-window_len-1:-1]]
     if window == 'flat': #moving average
         w=np.ones(window_len,'d')
-    if window == 'gaussian':
+    elif window == 'gaussian':
         if sigma==0:
             return x
         else:
@@ -55,571 +49,11 @@ def smooth(x,window_len,window,sigma):
 
 #CHECK
 
-## Atmosphère
-
-def plot_atmo(a1,a2,a3,coeff_sigma1=5,coeff_sigma2=3,coeff_sigma3=3,delta=5,demi_taille_max=120,coeff_sigmabis1=3,coeff_sigmabis2=3,coeff_sigmabis3=2,deltabis=10,demi_taille_maxbis=120,plot=True):
-    """
-    Fonction: calcul et renvoie l'atmosphère sans raie à partir d'un modèle d'atmosphère Libradtran ou affiche
-    les differentes etapes du detecteur de raies (parcouru 2 fois). La valeur des paramètres par defaut est
-    normalement suffisante pour l'extraction de l'atmosphère sans raies.
-
-    Entrees:
-    a1: paramètre d'ozone
-    a2: paramètre PWV (vapeur d'eau preciptable)
-    a3: paramètre d'aerosols
-
-    coeff_sigma1: premier seuil de detection du detecteur de raies 1er passsage
-    coeff_sigma2: deuxième seuil de detection du detecteur de raies 1er passsage
-    coeff_sigma3: troisième seuil de detection du detecteur de raies 1er passsage
-    coeff_sigmabis1: premier seuil de detection du detecteur de raies 2e passsage
-    coeff_sigmabis2: deuxième seuil de detection du detecteur de raies 2e passsage
-    coeff_sigmabis3: troisième seuil de detection du detecteur de raies 2e passsage
-
-    delta: nombre de pixel avant le premier seuil et après le dernier que l'on considère comme faisant partie
-    de la raie lors du 1er passage.
-    deltabis: nombre de pixel avant le premier seuil et après le dernier que l'on considère comme faisant partie
-    de la raie lors du 2e passage.
-
-    demi_taille_max: plage maximale en pixel entre le premier seuil et le deuxième seuil de detection, 1er passage.
-    demi_taille_maxbis: plage maximale en pixel entre le premier seuil et le deuxième seuil de detection, 2e passage.
-
-    plot: bouleen decidant les sorties de la fonction (True: affichage, False: retourne l'atmosphère sans raies)
-
-    Sorties:
-    Si plot==True:
-        affiche la fin de la première etape.
-        affiche la fin de la deuxième etape.
-        ne renvoie rien.
-
-    Si plot==False:
-        n'affiche rien.
-        renvoie une fonction d'interpoation de l'atmosphère sans raies.
-    """
-
-    #fichier au hasard pour atmgrid (Attention: determination ici de l'airmass prise dans la simulation)
-    atmgrid = AtmosphereGrid(filename="/Users/bremaud/CTIODataJune2017_reduced_RG715_v2_prod4/data_30may17_A2=0/reduc_20170530_135_atmsim.fits")
-    a = atmgrid.simulate(a1,a2,a3)
-
-
-    lambda_reel=np.arange(320,1050,1) #contient les longueurs d'ondes de l'atmosphère simulee.
-    intensite_reel=a(lambda_reel) #contient la transmission de l'atmosphère simulee avec raies (taille N)
-
-    intensite_reels=intensite_reel #on utilise le même algo que pour les spectres, ici on ne convolue par rien d'où le '='.
-    intensite_reelss=sp.signal.savgol_filter(intensite_reels, 7, 3) #filtre savgol (enlève le bruit)
-
-    "On commente un seul passage du detecteur de raie, le processus est le même dans les fonctions qui suivent."
-
-    """
-    Initialisation:
-        D_intensite_reelss est un tableau contenant la derivee de l'atmosphère simulee, taille N (on rajoute un 0, sans doute inutile)
-        Raies est un tableau de bouleen de taille N-1 indiquant pour chaque intensite si il s'agit d'une raie ou non.
-        D_mean est un tableau contenant la valeur moyenne des 10 dernières valeurs de derivees avant l'indice considere qui ne correspondent pas à des raies.
-        D_sigma est un tableau contenant l'ecart type des 10 dernières valeurs de derivees avant l'indice considere qui ne correspondent pas à des raies.
-    """
-
-    D_intensite_reelss=[]
-
-    for i in range(len(intensite_reelss)-1):
-        D_intensite_reelss.append((intensite_reelss[i+1]-intensite_reelss[i])/(lambda_reel[i+1]-lambda_reel[i]))
-
-    D_intensite_reelss.append(0)
-
-    D_mean=[]
-    D_sigma=[]
-    Raies=[]
-
-    for i in range(10):
-        Raies.append(False)
-        D_mean.append(np.mean(intensite_reelss[:10]))
-        D_sigma.append(np.std(intensite_reelss[:10]))
-
-    i=10
-    while i<len(D_intensite_reelss)-1:
-        moy=[]
-        j=1
-        Raies.append(False)
-        while len(moy)!=10:
-            if Raies[i-j]==False:
-                moy.append(D_intensite_reelss[i-j])
-            j+=1
-        D_mean.append(np.mean(moy))
-        D_sigma.append(np.std(moy))
-
-        if D_intensite_reelss[i]<D_mean[len(D_mean)-1]-coeff_sigma1*D_sigma[len(D_sigma)-1]:
-            k=i
-            while lambda_reel[k]-lambda_reel[i]<demi_taille_max and k<len(lambda_reel)-1:
-                k+=1
-            for j in range(i,k):
-                if D_intensite_reelss[j]>D_mean[len(D_mean)-1]+coeff_sigma2*D_sigma[len(D_sigma)-1]:
-                    if j+k-i<=len(lambda_reel):
-                        indice=j+k-i
-                    else:
-                        indice=len(lambda_reel)
-                    INDICE=indice
-                    for v in range(j,indice):
-                        if D_intensite_reelss[v]<D_mean[len(D_mean)-1]+coeff_sigma3*D_sigma[len(D_sigma)-1]:
-                            indice=v
-                            break
-
-                    if indice!=INDICE:
-                        if indice+delta>len(lambda_reel):
-                            end=len(lambda_reel)
-                        else:
-                            end=indice+delta
-                        for loop in range(i+1,indice+delta):
-                            Raies.append(True)
-                        for loop in range(i-delta,i+1):
-                            Raies[i]=True
-                        i=end
-                        Raies.append(False)
-                    break
-        i+=1
-
-    intensite_coupe=[]
-    lambda_coupe=[]
-    D_intensiteR_coupe=[]
-
-    if len(intensite_reelss)<len(Raies):
-        for i in range(len(Raies)-len(intensite_reelss)):
-            Raies.pop()
-
-    for i in range(len(Raies)):
-        if Raies[i]==False:
-            intensite_coupe.append(intensite_reelss[i])
-            lambda_coupe.append(lambda_reel[i])
-            D_intensiteR_coupe.append(D_intensite_reelss[i])
-            endfalse=i
-
-    intensite_reelSpline=sp.interpolate.interp1d(lambda_coupe,intensite_coupe)
-
-    #-------Deuxième passage dans le detecteur--------#
-
-    intensite_reelss=intensite_reelSpline(lambda_reel[10:-10])
-    lambda_reel=lambda_reel[10:-10]
-
-    D_intensite_reelss=[]
-    Raies=[]
-
-    for i in range(len(intensite_reelss)-1):
-        D_intensite_reelss.append((intensite_reelss[i+1]-intensite_reelss[i])/(lambda_reel[i+1]-lambda_reel[i]))
-
-    D_intensite_reelss.append(0)
-
-    D_mean=[]
-    D_sigma=[]
-    Raies=[]
-
-    for i in range(10):
-        Raies.append(False)
-        D_mean.append(np.mean(intensite_reelss[:10]))
-        D_sigma.append(np.std(intensite_reelss[:10]))
-
-    i=10
-    while i<len(D_intensite_reelss)-1:
-        moy=[]
-        j=1
-        Raies.append(False)
-        while len(moy)!=10:
-            if Raies[i-j]==False:
-                moy.append(D_intensite_reelss[i-j])
-            j+=1
-        D_mean.append(np.mean(moy))
-        D_sigma.append(np.std(moy))
-
-        if D_intensite_reelss[i]<D_mean[len(D_mean)-1]-coeff_sigmabis1*D_sigma[len(D_sigma)-1]:
-            k=i
-            while lambda_reel[k]-lambda_reel[i]<demi_taille_maxbis and k<len(lambda_reel)-1:
-                k+=1
-            for j in range(i,k):
-                if D_intensite_reelss[j]>D_mean[len(D_mean)-1]+coeff_sigmabis2*D_sigma[len(D_sigma)-1]:
-                    if j+k-i<=len(lambda_reel):
-                        indice=j+k-i
-                    else:
-                        indice=len(lambda_reel)
-                    INDICE=indice
-                    for v in range(j,indice):
-                        if D_intensite_reelss[v]<D_mean[len(D_mean)-1]+coeff_sigmabis3*D_sigma[len(D_sigma)-1]:
-                            indice=v
-                            break
-
-                    if indice!=INDICE:
-                        if indice+deltabis>len(lambda_reel):
-                            end=len(lambda_reel)
-                        else:
-                            end=indice+deltabis
-                        for loop in range(i+1,indice+deltabis):
-                            Raies.append(True)
-                        for loop in range(i-deltabis,i+1):
-                            Raies[i]=True
-                        i=end
-                        Raies.append(False)
-                    break
-        i+=1
-
-    intensite_coupe=[]
-    lambda_coupe=[]
-    D_intensiteR_coupe=[]
-
-    if len(intensite_reelss)<len(Raies):
-        for i in range(len(Raies)-len(intensite_reelss)):
-            Raies.pop()
-
-    for i in range(len(Raies)):
-        if Raies[i]==False:
-            intensite_coupe.append(intensite_reelss[i])
-            lambda_coupe.append(lambda_reel[i])
-            D_intensiteR_coupe.append(D_intensite_reelss[i])
-            endfalse=i
-
-    #-----Detection manuel-----#
-
-    i=0
-    intensite_coupebis=[]
-    lambda_coupebis=[]
-    VouF=True
-    for i in range(len(lambda_coupe)):
-        if lambda_coupe[i]<780:
-            if lambda_coupe[i]<755 or lambda_coupe[i]>770:
-                lambda_coupebis.append(lambda_coupe[i])
-                intensite_coupebis.append(intensite_coupe[i])
-
-
-        if lambda_coupe[i]>860 and lambda_coupe[i]<900:
-            lambda_coupebis.append(lambda_coupe[i])
-            intensite_coupebis.append(intensite_coupe[i])
-
-        if lambda_coupe[i]>900:
-            if VouF:
-                for e in np.linspace(lambda_coupe[i-1],894,20):
-                    lambda_coupebis.append(e)
-                    intensite_coupebis.append(intensite_coupe[i-1])
-                VouF=False
-            if lambda_coupe[i]>990:
-                lambda_coupebis.append(lambda_coupe[i])
-                intensite_coupebis.append(intensite_coupe[i])
-
-
-
-    if plot==False:
-        return sp.interpolate.interp1d(lambda_coupebis,intensite_coupebis)
-
-    intensite_reelSpline=sp.interpolate.interp1d(lambda_coupebis,intensite_coupebis)
-    plt.figure(figsize=[20,20])
-
-    plt.subplot(2, 2, 1)
-
-    plt.axis([300,1100,0,max(intensite_reel)*1.1])
-    plt.plot(lambda_reel,intensite_reelss,lw=3,c='red')
-    plt.xlabel('$\lambda$ (nm)',fontsize=24)
-    plt.ylabel('u.a',fontsize=24)
-    plt.title('Atmosphère après le premier passage',fontsize=24)
-    plt.gca().get_xaxis().set_tick_params(labelsize=20)
-    plt.gca().get_yaxis().set_tick_params(labelsize=20)
-    plt.grid(True)
-
-    plt.subplot(2, 2, 3)
-
-    plt.axis([300,1100,min(D_intensite_reelss)*1.1,max(D_intensite_reelss)*1.1])
-    plt.plot(lambda_reel,D_intensite_reelss,marker='.',zorder=1,label='derivee')
-    plt.scatter(lambda_coupe,D_intensiteR_coupe,marker='.',c='r',zorder=2,label='conservee')
-    plt.title("Derivee de l'atmosphère",fontsize=26)
-    plt.grid(True)
-    plt.xlabel('$\lambda$ (nm)',fontsize=24)
-    plt.ylabel('u.a',fontsize=24)
-    plt.gca().get_xaxis().set_tick_params(labelsize=20)
-    plt.gca().get_yaxis().set_tick_params(labelsize=20)
-    plt.legend(prop={'size':22},loc='upper right')
-
-    plt.subplot(2, 2, 2)
-
-    plt.axis([300,1100,0,max(intensite_reelss)*1.1])
-    plt.plot(lambda_coupebis,intensite_coupebis,' .')
-    plt.title('Atmosphère sans raies',fontsize=26)
-    plt.grid(True)
-    plt.xlabel('$\lambda$ (nm)',fontsize=24)
-    plt.ylabel('u.a',fontsize=24)
-    plt.gca().get_xaxis().set_tick_params(labelsize=20)
-    plt.gca().get_yaxis().set_tick_params(labelsize=20)
-
-    plt.subplot(2, 2, 4)
-
-    plt.axis([300,1100,0,max(intensite_reelss)*1.1])
-    plt.plot(lambda_reel,intensite_reelss,c='r',label='Atmosphère après premier passage')
-    plt.plot(lambda_reel[20:-20],intensite_reelSpline(lambda_reel[20:-20]),c='black',lw=3,label='Atmosphère finale')
-    plt.title('Atmosphère finale',fontsize=26)
-    plt.grid(True)
-    plt.xlabel('$\lambda$ (nm)',fontsize=24)
-    plt.ylabel('u.a',fontsize=24)
-    plt.gca().get_xaxis().set_tick_params(labelsize=20)
-    plt.gca().get_yaxis().set_tick_params(labelsize=20)
-    plt.legend(prop={'size':22},loc='lower right')
-
-    #plt.savefig('/Users/bremaud/Documents/raies.pdf')
-    plt.show()
-
-#CHECK
-
-## Lissage des raies
-
-def plot_spectre(fichier,sigma):
-
-    "Recuperation des donnees du fichier spectre"
-    s=Spectrum(fichier)
-
-    lambda_obs=s.lambdas
-    intensite_obs=s.data
-    lambda_reel=s.target.wavelengths[0]
-    intensite_reel=s.target.spectra[0]
-
-    intensite_reels=smooth(intensite_reel,4*sigma,'gaussian',sigma) #convolution par une gaussienne
-    intensite_reelss=sp.signal.savgol_filter(intensite_reels, 7, 3) #filtre savgol (enlève le bruit)
-    intensite_obss=sp.signal.savgol_filter(intensite_obs, 17, 3) #filtre savgol (enlève le bruit)
-
-    "Detecteur de raies"
-
-    D_intensite_reelss=[]
-    Raies=[]
-
-    for i in range(len(intensite_reelss)-1):
-        D_intensite_reelss.append((intensite_reelss[i+1]-intensite_reelss[i])/(lambda_reel[i+1]-lambda_reel[i]))
-
-    D_intensite_reelss.append(0)
-
-    D_mean=[]
-    D_sigma=[]
-    Raies=[]
-
-    for i in range(10):
-        Raies.append(False)
-        D_mean.append(np.mean(intensite_obss[:10]))
-        D_sigma.append(np.std(intensite_obss[:10]))
-
-    i=10
-    while i<len(D_intensite_reelss)-1:
-        moy=[]
-        j=1
-        Raies.append(False)
-        while len(moy)!=10:
-            if Raies[i-j]==False:
-                moy.append(D_intensite_reelss[i-j])
-            j+=1
-        D_mean.append(np.mean(moy))
-        D_sigma.append(np.std(moy))
-
-        if D_intensite_reelss[i]<D_mean[len(D_mean)-1]-2*D_sigma[len(D_sigma)-1]:
-            k=i
-            while lambda_reel[k]-lambda_reel[i]<50:
-                k+=1
-            for j in range(i,k):
-                if D_intensite_reelss[j]>D_mean[len(D_mean)-1]+2*D_sigma[len(D_sigma)-1]:
-                    indice=j+k-i
-                    for v in range(j,j+k-i):
-                        if D_intensite_reelss[v]<D_mean[len(D_mean)-1]+2*D_sigma[len(D_sigma)-1]:
-                            indice=v
-                            break
-
-                    if indice!=j+k-i:
-                        for loop in range(i+1,indice+15):
-                            Raies.append(True)
-                        for loop in range(i-15,i+1):
-                            Raies[i]=True
-                        i=indice+15
-                        Raies.append(False)
-                    break
-        i+=1
-
-    intensite_coupe=[]
-    lambda_coupe=[]
-    D_intensiteR_coupe=[]
-    for i in range(len(Raies)):
-        if Raies[i]==False:
-            D_intensiteR_coupe.append(D_intensite_reelss[i])
-            intensite_coupe.append(intensite_reelss[i])
-            lambda_coupe.append(lambda_reel[i])
-
-    intensite_reelSpline=sp.interpolate.interp1d(lambda_coupe,intensite_coupe)
-
-    alpha=1.5
-    D_intensite_obss=[]
-    Raies=[]
-
-    for i in range(len(intensite_obss)-1):
-        D_intensite_obss.append((intensite_obss[i+1]-intensite_obss[i])/(lambda_obs[i+1]-lambda_obs[i]))
-
-    D_intensite_obss.append(0)
-
-    D_mean=[]
-    D_sigma=[]
-    Raies=[]
-
-    for i in range(10):
-        Raies.append(False)
-        D_mean.append(np.mean(intensite_obss[:10]))
-        D_sigma.append(np.std(intensite_obss[:10]))
-
-    i=10
-    while i<len(D_intensite_obss)-1:
-        moy=[]
-        j=1
-        Raies.append(False)
-        while len(moy)!=10:
-            if Raies[i-j]==False:
-                moy.append(D_intensite_obss[i-j])
-            j+=1
-        D_mean.append(np.mean(moy))
-        D_sigma.append(np.std(moy))
-
-        if D_intensite_obss[i]<D_mean[len(D_mean)-1]-alpha*D_sigma[len(D_sigma)-1]:
-            k=i
-            while lambda_obs[k]-lambda_obs[i]<40 and k<len(lambda_obs)-1:
-                k+=1
-            for j in range(i,k):
-                if D_intensite_obss[j]>D_mean[len(D_mean)-1]+alpha*D_sigma[len(D_sigma)-1]:
-                    indice=j+k-i
-                    for v in range(j,j+k-i):
-                        if D_intensite_obss[v]<D_mean[len(D_mean)-1]+alpha*D_sigma[len(D_sigma)-1]:
-                            indice=v
-                            break
-
-                    if indice!=j+k-i:
-                        for loop in range(i+1,indice+4):
-                            Raies.append(True)
-                        for loop in range(i-4,i+1):
-                            Raies[i]=True
-                        i=indice+4
-                        Raies.append(False)
-                    break
-        i+=1
-
-    intensite_coupe_obs=[]
-    lambda_coupe_obs=[]
-    D_intensite_coupe=[]
-
-    for i in range(len(Raies)):
-        if Raies[i]==False:
-
-            intensite_coupe_obs.append(intensite_obss[i])
-            lambda_coupe_obs.append(lambda_obs[i])
-            D_intensite_coupe.append(D_intensite_obss[i])
-
-    intensite_obsSpline=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs)
-
-
-    fig=plt.figure(figsize=[15,10])
-    plt.axis([300,1040,0,1.1])
-    plt.plot(lambda_obs,intensite_obss/max(intensite_obss),color='blue',label='spectre observe')
-    plt.plot(lambda_reel,intensite_reel/max(intensite_reel),color='red',label='spectre CALSPEC')
-    plt.xlabel('$\lambda$ (nm)',fontsize=20)
-    plt.ylabel('flux normalise',fontsize=20)
-    plt.title("Spectre observe et spectre CALSPEC",fontsize=20)
-    plt.gca().get_xaxis().set_tick_params(labelsize=16)
-    plt.gca().get_yaxis().set_tick_params(labelsize=16)
-    plt.grid(True)
-    plt.legend(prop={'size':16},loc='upper right')
-    fig.tight_layout()
-    #plt.savefig('/Users/bremaud/Documents/spec_obs_CALSPEC.pdf')
-    plt.show()
-
-    fig=plt.figure(figsize=[15,12])
-    plt.subplot(2, 2, 3)
-
-    plt.axis([300,1040,min(D_intensite_obss)*1.5,max(D_intensite_obss)*1.1])
-    plt.plot(lambda_obs,D_intensite_obss,' .',label='derivee du spectre')
-    plt.plot(lambda_coupe_obs,D_intensite_coupe,' .',c='r',label='spectre conserve')
-    plt.title('Derivee du spectre observe',fontsize=26)
-    plt.grid(True)
-    plt.xlabel('$\lambda$ (nm)',fontsize=24)
-    plt.ylabel('flux (erg/cm^2/nm)',fontsize=24)
-    plt.gca().get_xaxis().set_tick_params(labelsize=20)
-    plt.gca().get_yaxis().set_tick_params(labelsize=20)
-    plt.text(550,max(D_intensite_obss)*0.65,'b)',fontsize=40)
-    plt.legend(prop={'size':22},loc='upper right')
-
-    plt.subplot(2, 2, 2)
-
-    plt.axis([300,1040,0,max(intensite_obss)*1.1])
-    plt.plot(lambda_coupe_obs,intensite_coupe_obs,' .')
-    plt.title('Spectre observe sans raies',fontsize=26)
-    plt.grid(True)
-    plt.xlabel('$\lambda$ (nm)',fontsize=24)
-    plt.ylabel('flux (erg/cm^2/nm)',fontsize=24)
-    plt.text(750,max(intensite_obss)*0.85,'c)',fontsize=40)
-    plt.gca().get_xaxis().set_tick_params(labelsize=20)
-    plt.gca().get_yaxis().set_tick_params(labelsize=20)
-
-    plt.subplot(2, 2, 4)
-
-    plt.axis([300,1040,0,max(intensite_obss)*1.1])
-    plt.plot(lambda_obs,intensite_obs,c='r',label='spectre observe initial')
-    plt.plot(lambda_obs[20:len(lambda_obs)-20],intensite_obsSpline(lambda_obs[20:len(lambda_obs)-20]),c='black',label='spectre observe sans raies')
-    plt.title('Spectre observe final',fontsize=26)
-    plt.grid(True)
-    plt.xlabel('$\lambda$ (nm)',fontsize=24)
-    plt.ylabel('flux (erg/cm^2/nm)',fontsize=24)
-    plt.gca().get_xaxis().set_tick_params(labelsize=20)
-    plt.gca().get_yaxis().set_tick_params(labelsize=20)
-    plt.text(750,max(intensite_obss)*0.85,'d)',fontsize=40)
-    plt.legend(prop={'size':22},loc='lower right')
-    fig.tight_layout()
-    #plt.savefig('/Users/bremaud/Documents/raies5.pdf')
-
-    plt.figure(figsize=[14,10])
-
-    plt.axis([300,1100,0,max(intensite_obs)*1.1])
-    plt.plot(lambda_obs,intensite_obs,' .')
-    plt.xlabel('$\lambda$ (nm)')
-    plt.ylabel('u.a')
-    plt.title('spectre observe')
-    plt.grid(True)
-
-    plt.figure(figsize=[14,10])
-
-    plt.axis([300,1100,0,max(intensite_obs)*1.1])
-    plt.plot(lambda_obs,intensite_obss,' .')
-    plt.xlabel('$\lambda$ (nm)')
-    plt.ylabel('u.a')
-    plt.title('spectre observe lisse savgol')
-    plt.grid(True)
-
-    plt.figure(figsize=[14,10])
-
-    plt.axis([300,1100,min(D_intensite_obss)*1.1,max(D_intensite_obss)*1.1])
-    plt.plot(lambda_obs,D_intensite_obss,' .')
-    plt.plot(lambda_coupe_obs,D_intensite_coupe,' .',c='r')
-    plt.title('derivee du spectre observe lisse')
-    plt.xlabel('$\lambda$ (nm)')
-    plt.ylabel('u.a')
-    plt.title('derivee du spectre observe lisse')
-    plt.grid(True)
-
-    plt.figure(figsize=[14,10])
-
-    plt.axis([300,1100,0,max(intensite_obs)*1.1])
-    plt.plot(lambda_coupe_obs,intensite_coupe_obs,' .')
-    plt.xlabel('$\lambda$ (nm)')
-    plt.ylabel('u.a')
-    plt.title('spectre observe sans raies')
-    plt.grid(True)
-
-    plt.figure(figsize=[14,10])
-
-    plt.axis([300,1100,0,max(intensite_obs)*1.1])
-    plt.plot(lambda_obs,intensite_obs,c='r')
-    plt.plot(lambda_obs[20:len(lambda_obs)-20],intensite_obsSpline(lambda_obs[20:len(lambda_obs)-20]),c='black')
-    plt.xlabel('$\lambda$ (nm)')
-    plt.ylabel('u.a')
-    plt.title('spectre observe final')
-    plt.grid(True)
-
-
-    plt.show()
-
-#CHECK
 
 ## Evaluation de la transmission instrumentale
 
 
-def Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,window,sigma,Bin,coeff_sigmaO,demi_taille_maxO,deltaO):
+def Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,sigma,window,Bin,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window):
 
     """Fonction: effectue la division en bin de longueur d'onde du spectre observe et le calcul de l'integrale
     sur ces derniers après avoir effectue une convolution pour le spectre observe (provenant des donnees).
@@ -640,7 +74,6 @@ def Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,window,sig
     Sortie:
         rempli les tableaux magabs, magabs_err, airmass. (methode)"""
 
-    "importation des donnees"
     intensite_obs=[]
     lambda_obs=[]
     intensite_err=[]
@@ -662,92 +95,131 @@ def Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,window,sig
         en bin on ne prend pas en compte la photo et on passe à la suivante"""
 
         if method=='raies':
-            intensite_obss=sp.signal.savgol_filter(intensite_obs, 17, 3)
 
-            D_intensite_obss=[]
-            Raies=[]
+            "Recuperation des donnees du fichier spectre"
 
-            for i in range(len(intensite_obss)-1):
-                D_intensite_obss.append((intensite_obss[i+1]-intensite_obss[i])/(lambda_obs[i+1]-lambda_obs[i]))
+            intensite_obs_savgol=sp.signal.savgol_filter(intensite_obs,filtre1_window,filtre1_order) #filtre savgol (enlève le bruit)
+            intensite_obs_savgol1=sp.interpolate.interp1d(lambda_obs,intensite_obs_savgol,kind='quadratic')
+
+            lambda_complet=np.linspace(lambda_obs[0],lambda_obs[-1],int((lambda_obs[-1]-lambda_obs[0])*10+1)) #précison Angtrom
+
+            intensite_obss=intensite_obs_savgol1(lambda_complet)
+
+            D_intensite_obss=[(intensite_obss[1]-intensite_obss[0])/(lambda_complet[1]-lambda_complet[0])]
+            for i in range(1,len(intensite_obss)-1):
+                D_intensite_obss.append((intensite_obss[i+1]-intensite_obss[i-1])/(lambda_complet[i+1]-lambda_complet[i-1]))
 
             D_intensite_obss.append(0)
+
 
             D_mean=[]
             D_sigma=[]
             Raies=[]
 
-            for i in range(10):
+            for i in range(moy_raies*10):
                 Raies.append(False)
-                D_mean.append(np.mean(intensite_obss[:10]))
-                D_sigma.append(np.std(intensite_obss[:10]))
+                D_mean.append(np.mean(intensite_obss[:moy_raies*10]))
+                D_sigma.append(np.std(intensite_obss[:moy_raies*10]))
 
-            i=10
+            #sur les moy_raies derniers nanomètres (par défaut 10)
+
+            i=moy_raies*10
             while i<len(D_intensite_obss)-1:
+                var_signe=0
                 moy=[]
                 j=1
                 Raies.append(False)
-                while len(moy)!=10:
+                while len(moy)!=moy_raies*10:
                     if Raies[i-j]==False:
                         moy.append(D_intensite_obss[i-j])
                     j+=1
                 D_mean.append(np.mean(moy))
                 D_sigma.append(np.std(moy))
 
-                if D_intensite_obss[i]<D_mean[len(D_mean)-1]-coeff_sigmaO*D_sigma[len(D_sigma)-1]:
+                if D_intensite_obss[i]<D_mean[-1]-trigger*D_sigma[-1]:
                     k=i
-                    while lambda_obs[k]-lambda_obs[i]<demi_taille_maxO and k<len(lambda_obs)-1:
+                    while lambda_complet[k]-lambda_complet[i]<demi_taille_max and k<len(lambda_complet)-1:
                         k+=1
+
                     for j in range(i,k):
-                        if D_intensite_obss[j]>D_mean[len(D_mean)-1]+coeff_sigmaO*D_sigma[len(D_sigma)-1]:
-                            if j+k-i<=len(lambda_obs):
+                        if D_intensite_obss[j+1]-D_intensite_obss[j]>0:
+                            var_signe=1
+                        if var_signe==1 and D_intensite_obss[j+1]-D_intensite_obss[j]<0:
+                            break
+
+                        if D_intensite_obss[j]>D_mean[-1]+trigger*D_sigma[-1]:
+                            if len(lambda_complet)-1>j+k-i:
                                 indice=j+k-i
                             else:
-                                indice=len(lambda_obs)
+                                indice=len(lambda_complet)-1
                             for v in range(j,indice):
-                                if D_intensite_obss[v]<D_mean[len(D_mean)-1]+coeff_sigmaO*D_sigma[len(D_sigma)-1]:
+                                if D_intensite_obss[v+1]-D_intensite_obss[v]<0:
+                                    if var_signe==1:
+                                        var_signe=2
+
+                                if var_signe==2 and D_intensite_obss[v+1]-D_intensite_obss[v]>0:
+                                    break
+
+                                if D_intensite_obss[v]<D_mean[-1]+trigger*D_sigma[-1]:
                                     indice=v
                                     break
 
-                            if indice!=j+k-i:
-                                if indice+deltaO>len(lambda_obs):
-                                    end=len(lambda_obs)
-                                else:
-                                    end=indice+deltaO
-                                for loop in range(i+1,end):
-                                    Raies.append(True)
-                                for loop in range(i-deltaO,i+1):
-                                    Raies[i]=True
-                                i=end
-                                Raies.append(False)
+                            if indice!=j+k-i and indice!=len(lambda_complet)-1:
+                                if var_signe==2 or var_signe==4:
+                                    for loop in range(i+1,indice+4):
+                                        Raies.append(True)
+                                        D_mean.append(np.mean(moy))
+                                        D_sigma.append(np.std(moy))
+                                    for loop in range(i-4,i+1):
+                                        Raies[i]=True
+                                    i=indice+4
+                                    Raies.append(False)
+                                    D_mean.append(np.mean(moy))
+                                    D_sigma.append(np.std(moy))
                             break
                 i+=1
 
             intensite_coupe_obs=[]
             lambda_coupe_obs=[]
             D_intensite_coupe=[]
-            if len(intensite_obss)<len(Raies):
-                for i in range(len(Raies)-len(intensite_obss)):
-                    Raies.pop()
+
+            for i in range(10,len(Raies)):
+                if Raies[i]==False:
+                    stop=0
+                    for j in range(i-3,i+1):
+                        if Raies[j]==True:
+                            stop=1
+                    if stop==1:
+                        for j in range(i+1,i+4):
+                            if Raies[j]==True:
+                                stop=2
+                    if stop==2:
+                        Raies[i]=True
 
             for i in range(len(Raies)):
                 if Raies[i]==False:
-                    intensite_coupe_obs.append(intensite_obss[i])
-                    lambda_coupe_obs.append(lambda_obs[i])
-                    D_intensite_coupe.append(D_intensite_obss[i])
-                    endfalse=i
-            interpolation_obs=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs)
 
+                    intensite_coupe_obs.append(intensite_obss[i])
+                    lambda_coupe_obs.append(lambda_complet[i])
+                    D_intensite_coupe.append(D_intensite_obss[i])
+
+            intensite_obsSpline=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs,bounds_error=False,fill_value="extrapolate")
+            INTENSITE_OBS=intensite_obsSpline(lambda_complet)
+            INTENSITE_OBSS=smooth(INTENSITE_OBS,filtre1avg_window,'flat',1)
+
+            interpolation_obs=sp.interpolate.interp1d(lambda_complet,INTENSITE_OBSS)
 
             if DEBUG:
                 plt.figure(figsize=[6,6])
                 plt.axis([300,1100,0,max(intensite_obs)*1.1])
                 plt.plot(lambda_obs,intensite_obs,c='r')
-                plt.plot(lambda_obs[1:endfalse],interpolation_obs(lambda_obs[1:endfalse]),c='black')
+                plt.plot(lambda_complet,INTENSITE_OBSS,c='black')
                 plt.xlabel('$\lambda$ (nm)')
                 plt.ylabel('u.a')
                 plt.title('spectre observe sans raies')
                 plt.grid(True)
                 plt.show()
+
 
         elif method=='convoluate':
 
@@ -767,6 +239,7 @@ def Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,window,sig
             X=np.linspace(Bin[v],Bin[v+1],1000)
             Y=interpolation_obs(X)
             fluxlum_Binobs[v]=integrate.simps(Y,X,dx=1)/(Bin[v+1]-Bin[v])
+
             """Integration sur un bin de longueur d'onde avec 1000 points, on considèrera ensuite cette valeur comme
             valeur de l'intensite pour la longueur d'onde moyenne du bin"""
 
@@ -817,7 +290,7 @@ def Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,window,sig
         NAME.pop()
 #CHECK
 
-def Plot_magabsorbe_star(DEBUG,method,sim,fileday,star,disperseur,window,sigma,binwidth,lambda_min,lambda_max,coeff_sigmaO,demi_taille_maxO,deltaO,coeff_sigma,demi_taille_max,delta):
+def Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambda_max,DEBUG,sigma_max,mag_diffmax,filtre2_order,filtre3_order,filtre2avg_window,filtre2_window,filtre3_window,sigma,window,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window):
 
     """Fonction: renvoie les tableaux magabas, airmass, fluxlumBin_reel, Bin.
 
@@ -875,87 +348,67 @@ def Plot_magabsorbe_star(DEBUG,method,sim,fileday,star,disperseur,window,sigma,b
             Airmass=float(a[3])
             break
 
+
         if VouF and Star==star: #uniquement lors du premier passage
             intensite_reel=[]
             lambda_reel=[]
             for line in s:
                 a=line.split()
-                intensite_reel.append(float(a[1]))
-                lambda_reel.append(float(a[0]))
+                if float(a[0])>lambda_min-50 and float(a[0])<lambda_max+50:
+                    intensite_reel.append(float(a[1]))
+                    lambda_reel.append(float(a[0]))
 
             if method=='raies':
 
-                intensite_reels=smooth(intensite_reel,6*sigma,'gaussian',sigma) #convolution par une gaussienne
-                intensite_reelss=sp.signal.savgol_filter(intensite_reels, 7, 3) #filtre savgol (enlève le bruit)
+                intensite_reel_savgol=sp.signal.savgol_filter(intensite_reel,filtre3_window,filtre3_order) #filtre savgol (enlève le bruit)
+                intensite_reel_1=sp.interpolate.interp1d(lambda_reel,intensite_reel_savgol,kind='cubic')
 
-                D_intensite_reelss=[]
-                Raies=[]
+                lambda_complet=np.linspace(lambda_reel[0],lambda_reel[-1],int((lambda_reel[-1]-lambda_reel[0])*10+1)) #précison Angtrom
+                Intensite_reel=intensite_reel_1(lambda_complet)
 
-                for i in range(len(intensite_reelss)-1):
-                    D_intensite_reelss.append((intensite_reelss[i+1]-intensite_reelss[i])/(lambda_reel[i+1]-lambda_reel[i]))
+                intensite_tronque=[Intensite_reel[0]]
+                lambda_tronque=[lambda_complet[0]]
+                c=0
+                for i in range(1,len(lambda_complet)-1):
+                    if (Intensite_reel[i+1]-Intensite_reel[i-1])/(lambda_complet[i+1]-lambda_complet[i-1])>0:
+                        c=1
 
-                D_intensite_reelss.append(0)
+                    elif c==1 and (Intensite_reel[i+1]-Intensite_reel[i-1])/(lambda_complet[i+1]-lambda_complet[i-1])<0:
+                        intensite_tronque.append(Intensite_reel[i])
+                        lambda_tronque.append(lambda_complet[i])
+                        c=0
 
-                D_mean=[]
-                D_sigma=[]
-                Raies=[]
+                intensite_tronque.append(Intensite_reel[-1])
+                lambda_tronque.append(lambda_complet[-1])
 
-                for i in range(10):
-                    Raies.append(False)
-                    D_mean.append(np.mean(intensite_reelss[:10]))
-                    D_sigma.append(np.std(intensite_reelss[:10]))
 
-                i=10
-                while i<len(D_intensite_reelss)-1:
-                    moy=[]
-                    j=1
-                    Raies.append(False)
-                    while len(moy)!=10:
-                        if Raies[i-j]==False:
-                            moy.append(D_intensite_reelss[i-j])
-                        j+=1
-                    D_mean.append(np.mean(moy))
-                    D_sigma.append(np.std(moy))
+                for j in range(100):
+                    intensite_tronque2=[Intensite_reel[0]]
+                    lambda_tronque2=[lambda_complet[0]]
+                    c=0
+                    for i in range(1,len(lambda_tronque)-1):
+                        if intensite_tronque[i-1]<intensite_tronque[i] or intensite_tronque[i+1]<intensite_tronque[i]:
+                            intensite_tronque2.append(intensite_tronque[i])
+                            lambda_tronque2.append(lambda_tronque[i])
 
-                    if D_intensite_reelss[i]<D_mean[len(D_mean)-1]-coeff_sigma*D_sigma[len(D_sigma)-1]:
-                        k=i
-                        while lambda_reel[k]-lambda_reel[i]<demi_taille_max:
-                            k+=1
-                        for j in range(i,k):
-                            if D_intensite_reelss[j]>D_mean[len(D_mean)-1]+coeff_sigma*D_sigma[len(D_sigma)-1]:
-                                indice=j+k-i
-                                for v in range(j,j+k-i):
-                                    if D_intensite_reelss[v]<D_mean[len(D_mean)-1]+2*D_sigma[len(D_sigma)-1]:
-                                        indice=v
-                                        break
+                    intensite_tronque2.append(Intensite_reel[-1])
+                    lambda_tronque2.append(lambda_complet[-1])
 
-                                if indice!=j+k-i:
-                                    for loop in range(i+1,indice+delta):
-                                        Raies.append(True)
-                                    for loop in range(i-delta,i+1):
-                                        Raies[i]=True
-                                    i=indice+delta
-                                    Raies.append(False)
-                                break
-                    i+=1
+                    intensite_tronque=intensite_tronque2
+                    lambda_tronque=lambda_tronque2
 
-                intensite_coupe=[]
-                lambda_coupe=[]
-                D_intensiteR_coupe=[]
+                Intensite_reels=sp.interpolate.interp1d(lambda_tronque,intensite_tronque,bounds_error=False,fill_value="extrapolate")
+                Intensite_reel=Intensite_reels(lambda_complet)
+                INTENSITE_reel=smooth(Intensite_reel,filtre2avg_window,'flat',1)
+                INTENSITE_reelS=sp.signal.savgol_filter(INTENSITE_reel,filtre2_window,filtre2_order)
 
-                for i in range(len(Raies)):
-                    if Raies[i]==False:
-                        D_intensiteR_coupe.append(D_intensite_reelss[i])
-                        intensite_coupe.append(intensite_reelss[i])
-                        lambda_coupe.append(lambda_reel[i])
-
-                interpolation_reel=sp.interpolate.interp1d(lambda_coupe,intensite_coupe)
+                interpolation_reel=sp.interpolate.interp1d(lambda_complet,INTENSITE_reelS)
 
                 if DEBUG:
                     plt.figure(figsize=[6,6])
-                    plt.axis([300,1100,0,max(intensite_reelss)*1.1])
+                    plt.axis([300,1100,0,max(intensite_reel)*1.1])
                     plt.plot(lambda_reel,intensite_reel,c='r')
-                    plt.plot(lambda_reel[5:-5],interpolation_reel(lambda_reel[5:-5]),c='black')
+                    plt.plot(lambda_complet,INTENSITE_reelS,c='black')
                     plt.xlabel('$\lambda$ (nm)')
                     plt.ylabel('u.a')
                     plt.title('spectre reel final')
@@ -987,7 +440,7 @@ def Plot_magabsorbe_star(DEBUG,method,sim,fileday,star,disperseur,window,sigma,b
             NAME.append(name_data)
             print(name_data)
             s=open(list_spectrums[spec],'r')
-            Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,window,sigma,Bin,coeff_sigmaO,demi_taille_maxO,deltaO)
+            Plot_magabsorbe_bin(NAME,DEBUG,method,magabs,magabs_err,airmass,s,sigma,window,Bin,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window)
 
         spec+=1
         s.close()
@@ -1006,10 +459,10 @@ def Plot_magabsorbe_star(DEBUG,method,sim,fileday,star,disperseur,window,sigma,b
             S=0
             for j in range(len(magabs)): #on effectue une moyenne de la difference sur chaque bin
                 S=abs(np.mean(magabs[j])-magabs[j][i])
-                if sim and S>1:
+                if sim and S>mag_diffmax:
                     L.append(i)
                     break
-                elif sim==False and S>1:
+                elif sim==False and S>mag_diffmax:
                     L.append(i)
                     break
 
@@ -1021,12 +474,12 @@ def Plot_magabsorbe_star(DEBUG,method,sim,fileday,star,disperseur,window,sigma,b
                     residu_m=abs(magabs[j][i]-f(airmass[j][i],*popt))
                     S=residu_m
                     if sim:
-                        if S>3*np.std(magabs[j]):
+                        if S>sigma_max*np.std(magabs[j]):
                             L.append(i)
                             break
 
                     else:
-                        if S>3*np.std(magabs[j]):
+                        if S>sigma_max*np.std(magabs[j]):
                             L.append(i)
                             break
 
@@ -1042,10 +495,14 @@ def Plot_magabsorbe_star(DEBUG,method,sim,fileday,star,disperseur,window,sigma,b
                 magabs_err[j].pop(L[i]-i)
 
     return(airmass,magabs,magabs_err,Bin,fluxlum_Binreel)
+
 #CHECK
 
 
-def droites_Bouguer(DEBUG,method,sim,fileday,star,disperseur,window,sigma,binwidth,lambda_min,lambda_max,coeff_sigmaO,demi_taille_maxO,deltaO,coeff_sigma,demi_taille_max,delta):
+def droites_Bouguer(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambda_max,DEBUG,sigma_max,mag_diffmax,filtre2_order,filtre3_order,filtre2avg_window,filtre2_window,filtre3_window,sigma,window,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window):
+
+
+
     """Fonction: effectue pour toute les photos d'une même etoile, le trace de magabs par bin de longueur d'onde
 
     Entree:
@@ -1058,7 +515,7 @@ def droites_Bouguer(DEBUG,method,sim,fileday,star,disperseur,window,sigma,binwid
         Tableaux des bins, des incertitudes, et de l'intensite par bin tabulee"""
 
     "Recuperation des tableaux renvoyes par Plot_magabsorbe_star"
-    airmass, magabs, magabs_err, Bin, fluxlum_Binreel=Plot_magabsorbe_star(DEBUG,method,sim,fileday,star,disperseur,window,sigma,binwidth,lambda_min,lambda_max,coeff_sigmaO,demi_taille_maxO,deltaO,coeff_sigma,demi_taille_max,delta)
+    airmass, magabs, magabs_err, Bin, fluxlum_Binreel=Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambda_max,DEBUG,sigma_max,mag_diffmax,filtre2_order,filtre3_order,filtre2avg_window,filtre2_window,filtre3_window,sigma,window,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window)
 
     "Definition de la fonction lineaire qu'on va utiliser pour tracer les droites de Bouguer."
     def f(x,a,b):
@@ -1095,27 +552,15 @@ def droites_Bouguer(DEBUG,method,sim,fileday,star,disperseur,window,sigma,binwid
         MAG=f(Z, *popt)
         MAG_sup=f(Z,popt[0]+np.sqrt(pcov[0][0]),popt[1]-np.sqrt(pcov[1][1]))
         MAG_inf=f(Z,popt[0]-np.sqrt(pcov[0][0]),popt[1]+np.sqrt(pcov[1][1]))
-        #plt.plot(Z,MAG,c=wavelength_to_rgb(new_lambda[i]))
         plt.plot(Z,MAG,c='black')
-
-        # Attention à modifier
-        #plt.plot(Z,MAG_sup,c=wavelength_to_rgb(new_lambda[i]),linestyle=':')
-        #plt.plot(Z,MAG_inf,c=wavelength_to_rgb(new_lambda[i]),linestyle=':')
         plt.plot(Z,MAG_sup,c='black',linestyle=':')
         plt.plot(Z,MAG_inf,c='black',linestyle=':')
-        #plt.fill_between(Z,MAG_sup,MAG_inf,color=[wavelength_to_rgb(new_lambda[i])])
-        "la commande ci-dessus grise donne la bonne couleur la zone où se trouve la droite de Bouguer"
-
-        #plt.scatter(airmass[i],magabs[i],c=[wavelength_to_rgb(new_lambda[i])],
-            #label=f'{Bin[i]}-{Bin[i+1]} nm', marker='o',s=30)
 
         plt.scatter(airmass[i],magabs[i],c='black',
             label=f'{Bin[i]}-{Bin[i+1]} nm', marker='o',s=30)
-        #plt.errorbar(airmass[i],magabs[i], xerr=None, yerr = magabs_err[i],fmt = 'none',
-            #capsize = 1, ecolor=(wavelength_to_rgb(new_lambda[i])), zorder = 2,elinewidth = 2)
+
         plt.errorbar(airmass[i],magabs[i], xerr=None, yerr = magabs_err[i],fmt = 'none',
             capsize = 1, ecolor=('black'), zorder = 2,elinewidth = 2)
-    #Interpolation des paramètres des droites de bouguer:
 
     a_lambda=interp1d(new_lambda,coeff.T[0])
     b_lambda=interp1d(new_lambda,coeff.T[1])
@@ -1123,114 +568,13 @@ def droites_Bouguer(DEBUG,method,sim,fileday,star,disperseur,window,sigma,binwid
     Lambda=np.arange(new_lambda[0],new_lambda[len(new_lambda)-1],1)
     coeffbis=coeff #à supprimer
 
-    """
-    #apparte concernant l'atmosphère (et celle trouvee avec les droites de Bouguer)
 
-    atmgrid = AtmosphereGrid(filename="/Users/bremaud/CTIODataJune2017_reduced_RG715_v2_prod4/data_30may17_A2=0/reduc_20170530_135_atmsim.fits")
-
-    a = plot_atmo(300,4,0.05,plot=False) #fonction de l'atmosphère lissee
-    b = atmgrid.simulate(300,4,0.05) #fonction de l'atmosphère non lissee
-
-    #Normalisation
-    for i in range(len(new_lambda)):
-        if new_lambda[i]>751:
-            coeff[-1][0]=np.log(np.exp(coeff[i][0]*1.137)/(a(new_lambda[i])/max(a(new_lambda))))/1.137
-            break
-
-    #On force la pente des droites de Bouguer à valoir la pente theorique
-    for i in range(len(new_lambda)):
-        if new_lambda[i]>751:
-            coeff.T[0][i]=np.log(np.max(np.exp(coeff.T[0]*1.137))*a(new_lambda[i])/max(a(Lambda)))/1.137
-
-    #Nouvelle fonction d'interpolation avec les nouvelles pentes.
-    a_lambdabis=interp1d(new_lambda,coeff.T[0])
-
-    #fit de l'ordre 2
-
-    alpha=np.zeros(len(magabs)-j+1)
-    for i in range(j,len(magabs)):
-        a_2=a_lambdabis(Bin[i]/2)
-        b_2=b_lambda(Bin[i]/2)
-        a_1=coeff[i][0]
-        def g(x,b_1,alpha):
-            return a_1*x+b_1+np.log(1+alpha*np.exp((a_2-a_1)*x+b_2-b_1))
-
-        popt, pcov=sp.optimize.curve_fit(g,airmass[i],magabs[i],p0=(coeff[i][1]-0.3,80e-2),bounds=([coeff[i][1]-0.9,0],[coeff[i][1],100e-2]))
-        #Attention aux limites de alpha
-
-        coeffbis[i-j]=[coeff[i][0],popt[0]]
-        alpha[i-j]=popt[1]
-        MAG=g(Z, *popt)
-        #plt.plot(Z,MAG,c='black',lw=2) (optionnel pour afficher le nouveau fit mais ça n'apporte pas grand chose)
-
-    "Determination des limites du graphique"
-    Min = np.min(magabs)
-    Max = np.max(magabs)
-
-    plt.xlabel("airmass",fontsize=24)
-    plt.ylabel('ln(flux)',fontsize=24)
-    plt.title('ln(flux) par bin: '30may', '+star+', '+disperseur+', convolution, $\sigma$='+str(sigma)+', binwidth='+str(binwidth),fontsize=22)
-    plt.axis([0,2.2,Min-0.2,Max+0.3])
-    plt.gca().get_xaxis().set_tick_params(labelsize=18)
-    plt.gca().get_yaxis().set_tick_params(labelsize=18)
-    plt.legend(prop={'size':12},loc='right')
-    plt.grid(True)
-    fig.tight_layout()
-    #plt.savefig('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/image/droite_bouguer1.pdf')
-    plt.show()
-    #fin de la figure des droites de Bouguer.
-
-    #debut figure atmosphère.
-
-    fig = plt.figure(figsize=[15, 10])
-
-    a = plot_atmo(300,4,0.05,plot=False)
-    b = atmgrid.simulate(300,4,0.05)
-    c= atmgrid.simulate(300,4,0)
-    d=atmgrid.simulate(300,4,0.1)
-    #plt.plot(Lambda, a(Lambda)/max(a(Lambda)),c='black',lw=2,label='atmosphère sans raies')
-    #plt.plot(Lambda, b(Lambda)/max(b(Lambda)),c='red',lw=2,label='atmosphère en entree de la simu')
-    plt.plot(Lambda, b(Lambda)/max(b(Lambda)),c='red',label='VAOD = 0.05',lw=5)
-    plt.plot(Lambda, c(Lambda)/max(c(Lambda)),c='blue',linestyle='dotted',label='VAOD = 0',lw=5)
-    plt.plot(Lambda, d(Lambda)/max(d(Lambda)),c='black',linestyle='dotted',label='VAOD = 0.1',lw=5)
-    #plt.plot(Lambda,np.exp(a_lambdabis(Lambda)*1.137)/np.max(np.exp(a_lambdabis(Lambda)*1.137)),c='blue',lw=2,label='atmosphère en sortie après modification')
-    #plt.plot(Lambda,np.exp(a_lambda(Lambda)*1.137)/np.max(np.exp(a_lambda(Lambda)*1.137)),c='black',lw=2,label='atmosphère en sortie de la simu')
-
-    plt.xlabel('$\lambda$ (nm)',fontsize=28)
-    plt.ylabel('Transmission atmospherique normalisee',fontsize=28)
-    plt.gca().get_xaxis().set_tick_params(labelsize=22)
-    plt.gca().get_yaxis().set_tick_params(labelsize=22)
-    plt.title("Dependance du modèle d'atmosphère aux aerosols",fontsize=28) #à changer selon l'affichage souhaite
-    plt.axis([Bin[0],Bin[len(Bin)-1],0.2,1.1])
-    plt.legend(prop={'size':26},loc='lower left')
-    plt.grid(True)
-    #plt.savefig('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/coeff_sigmaO='+str(coeff_sigmaO)+'/demi_taille_maxO='+str(demi_taille_maxO)+'/deltaO='+str(deltaO)+'/coeff_sigma='+str(coeff_sigma)+'/demi_taille_max='+str(demi_taille_max)+'/delta='+str(delta)+'/image/transmission_atmo4.pdf')
-    plt.show()
-
-    #Residus aux droites de Bouguer.
-
-    def f(x,a,b):
-        return a*x+b
-    fig = plt.figure(figsize=[25, 25])
-    residu_m=np.zeros((len(magabs),len(magabs[0])))
-    for i in range(len(magabs)):
-        residu_m[i]=np.array(magabs[i])-f(np.array(airmass[i]),coeff[i][0],coeff[i][1])
-        plt.plot(airmass[i],residu_m[i],marker='.',c=(wavelength_to_rgb(new_lambda[i])))
-
-    plt.axis([min(airmass[i]),max(airmass[i]),np.min(residu_m),np.max(residu_m)])
-    plt.gca().get_xaxis().set_tick_params(labelsize=18)
-    plt.gca().get_yaxis().set_tick_params(labelsize=18)
-    plt.xlabel('airmass',fontsize=24)
-    plt.title('Residus aux droites: '+date+', '+star+', '+disperseur+', '+method+', $\sigma$='+str(sigma)+', binwidth='+str(binwidth),fontsize=24)
-    plt.ylabel('magnitude',fontsize=24)
-    #plt.savefig('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/coeff_sigmaO='+str(coeff_sigmaO)+'/demi_taille_maxO='+str(demi_taille_maxO)+'/deltaO='+str(deltaO)+'/coeff_sigma='+str(coeff_sigma)+'/demi_taille_max='+str(demi_taille_max)+'/delta='+str(delta)+'/image/residus.pdf')
-    plt.show()
-    """
     return (coeff,coeffbis,Bin,err,fluxlum_Binreel)
 #CHECK
 
 
-def reponse_instrumentale(method,sim,fileday,star,disperseur,DEBUG=False,window='gaussian',sigma=5,binwidth=20,lambda_min=370,lambda_max=1030,coeff_sigmaO=1.5,demi_taille_maxO=40,deltaO=4,coeff_sigma=2.5,demi_taille_max=30,delta=12):
+def reponse_instrumentale(method,sim,fileday,star,disperseur,binwidth=20,lambda_min=370,lambda_max=1030,DEBUG=False,sigma_max=3,mag_diffmax=1,filtre2_order=3,filtre3_order=3,filtre2avg_window=155,filtre2_window=183,filtre3_window=11,sigma=5,window='gaussian',trigger=2,filtre1_window=17,filtre1_order=3,moy_raies=10,demi_taille_max=40,filtre1avg_window=95):
+
     """Fonction: trace la reponse instrumentale obtenue ainsi que celle de Sylvie, Augustion et Nick et enregistre les
     donnees dans des fichiers pdf (pour la reponse instrumentale) et txt cree à l'execution.
     Si sim: uniquement la reponse de Sylvie.
@@ -1253,7 +597,7 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,DEBUG=False,window=
 
 
     "Recuperation des tableaux renvoyes par droites_Bouguer"
-    coeff, coeffbis, Bin, err, fluxlum_Binreel=droites_Bouguer(DEBUG,method,sim,fileday,star,disperseur,window,sigma,binwidth,lambda_min,lambda_max,coeff_sigmaO,demi_taille_maxO,deltaO,coeff_sigma,demi_taille_max,delta)
+    coeff, coeffbis, Bin, err, fluxlum_Binreel=droites_Bouguer(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambda_max,DEBUG,sigma_max,mag_diffmax,filtre2_order,filtre3_order,filtre2avg_window,filtre2_window,filtre3_window,sigma,window,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window)
 
     """On calcul les tableaux rep_instru correspondant à la reponse instrumentale, new_err l'erreur associee et
     new_lambda la longueur d'onde associe à la reponse instrumentale."""
@@ -1336,15 +680,6 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,DEBUG=False,window=
                               }, color = 'black')
 
 
-        #ax1.scatter(new_lambda,rep_instru/Max,c='black', marker='o',label='T_inst Vincent',zorder=2,s=35)
-        #ax1.errorbar(new_lambda,rep_instru/Max, xerr=None, yerr = new_err/max(rep_instru),fmt = 'none', capsize = 1, ecolor = 'black', zorder = 2,elinewidth = 2)
-        """
-        Lambda=np.arange(new_lambda[0],new_lambda[len(new_lambda)-1],1)
-        atmgrid = AtmosphereGrid(filename="/Users/bremaud/CTIODataJune2017_reduced_RG715_v2_prod4/data_30may17_A2=0/reduc_20170530_135_atmsim.fits")
-        b = atmgrid.simulate(300,5,0.05)
-        ax2.plot(Lambda, b(Lambda)/max(b(Lambda)),color='blue')
-        """
-
     "Si le disperseur correspond au Ronchi400 on compare avec les autres reponses instrumentales"
 
     if disperseur=='Ron400':
@@ -1402,7 +737,7 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,DEBUG=False,window=
         else:
             ax[0].set_ylabel('Transmission du CTIO + '+disperseur+' normalisee',fontsize=20)
 
-        ax[0].set_title('Transmission instrumentale avec ordre 2',fontsize=24)
+        ax[0].set_title('Transmission instrumentale sans ordre 2, '+star+', '+disperseur+', F7V-VI',fontsize=24)
         ax[0].axis([Bin[0],Bin[len(Bin)-1],0,1.1])
         ax[0].get_xaxis().set_tick_params(labelsize=20)
         ax[0].get_yaxis().set_tick_params(labelsize=15)
@@ -1479,18 +814,11 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,DEBUG=False,window=
         #ax[1].text(650,max(rep_sim_norm)*3/4,'$\sigma_{bis}$= '+str(X_2_bis)[:4]+'%',color='blue',fontsize=20) (fit de l'ordre 2)
         fig.tight_layout()
         plt.subplots_adjust(wspace=0, hspace=0)
-        """
-        if method=='raies':
-            plt.savefig('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/coeff_sigmaO='+str(coeff_sigmaO)+'/demi_taille_maxO='+str(demi_taille_maxO)+'/deltaO='+str(deltaO)+'/coeff_sigma='+str(coeff_sigma)+'/demi_taille_max='+str(demi_taille_max)+'/delta='+str(delta)+'/image/transmission_instrumentale07fit.pdf')
-        else:
-            plt.savefig('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/image/transmission_instrumentale03.pdf')
-        """
         plt.show()
 
         #Trace des correlations (finalement peu utile)
         fig2 = plt.figure(figsize=(10,10))
         for i in range(len(rep_sim)):
-            #plt.scatter(new_rep_ideal[i],rep_sim[i],c=(wavelength_to_rgb(lambda_sim[i])),marker='o')
             plt.scatter(new_rep_ideal[i],rep_sim[i],c='black',marker='o')
         plt.xlabel('Transmission instrumentale Sylvie',fontsize=15)
         plt.ylabel('Transmission instrumentale Vincent',fontsize=15)
@@ -1512,66 +840,22 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,DEBUG=False,window=
         plt.grid(True)
         plt.axis([0,1,0,1])
         plt.legend(prop={'size':15},loc='upper left')
-        #plt.savefig('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/coeff_sigmaO='+str(coeff_sigmaO)+'/demi_taille_maxO='+str(demi_taille_maxO)+'/deltaO='+str(deltaO)+'/coeff_sigma='+str(coeff_sigma)+'/demi_taille_max='+str(demi_taille_max)+'/delta='+str(delta)+'/image/correlation.pdf')
         plt.show()
 
-        #rempli des fichiers avec la valeur des reponses instrumentales calculees (à partir des simu)
-        """
-        if method=='raies':
-            fichier=open('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/coeff_sigmaO='+str(coeff_sigmaO)+'/demi_taille_maxO='+str(demi_taille_maxO)+'/deltaO='+str(deltaO)+'/coeff_sigma='+str(coeff_sigma)+'/demi_taille_max='+str(demi_taille_max)+'/delta='+str(delta)+'/texte/transmission_instrumentale02.txt','w')
-            fichierbis=open('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/Comparaisons/02rep_binwidth='+str(binwidth)+'_sigma='+str(sigma)+'_coeff_sigmaO='+str(coeff_sigmaO)+'_demi_taille_maxO='+str(demi_taille_maxO)+'_deltaO='+str(deltaO)+'_coeff_sigma='+str(coeff_sigma)+'_demi_taille_max='+str(demi_taille_max)+'_delta='+str(delta)+'.txt','w')
-            fichier.write(str(X_2)+'\n')
-            fichierbis.write(str(X_2)+'\t'+str(binwidth)+'\t'+str(sigma)+'\t'+str(coeff_sigmaO)+'\t'+str(demi_taille_maxO)+'\t'+str(deltaO)+'\t'+str(coeff_sigma)+'\t'+str(demi_taille_max)+'\t'+str(delta)+'\n')
-            for i in range(len(rep_instru)):
-                fichier.write(str(new_lambda[i])+'\t'+str(rep_instru[i]/Max)+'\t'+str(new_err[i]/Max)+'\n')
-            fichier.close()
-            fichierbis.close()
-        else:
-            fichier=open('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/texte/transmission_instrumentale02.txt','w')
-            fichierbis=open('/Users/bremaud/Documents/rep_instru/simulations/'+disperseur+'/'+method+'/Comparaisons/02rep_binwidth='+str(binwidth)+'_sigma='+str(sigma)+'.txt','w')
-            fichier.write(str(X_2)+'\n')
-            fichierbis.write(str(X_2)+'\t'+str(binwidth)+'\t'+str(sigma)+'\n')
-            for i in range(len(rep_instru)):
-                fichier.write(str(new_lambda[i])+'\t'+str(rep_instru[i]/Max)+'\t'+str(new_err[i]/Max)+'\n')
-            fichier.close()
-            fichierbis.close()"""
 
     else:
         ax2.set_xlabel('$\lambda$ (nm)',fontsize=24)
-        if disperseur=='Ron400':
-            #ax1.set_ylabel('Transmission du CTIO normalisee',fontsize=22)
-            ax2.set_ylabel("Transmission normalisee",fontsize=22)
-        #else:
-            #ax1.set_ylabel('Transmission du CTIO + '+disperseur+' normalisee',fontsize=22)
-
+        ax2.set_ylabel("Transmission normalisee",fontsize=22)
         ax2.set_title("Illustration d'une transmission atmospherique simulee",fontsize=22)
-        #ax1.axis([Bin[0],Bin[len(Bin)-1],0,1.25])
         ax2.axis([Bin[0],Bin[len(Bin)-1],0,1.25])
         ax2.get_xaxis().set_tick_params(labelsize=20)
-        #ax1.get_yaxis().set_tick_params(labelsize=20)
         ax2.get_yaxis().set_tick_params(labelsize=20)
-
         plt.grid(True)
-        #ax2.legend(prop={'size':18},loc='lower right')
-        #ax1.legend(prop={'size':18},loc='lower left')
         fig.tight_layout()
 
-        #rempli des fichiers avec la valeur des reponses instrumentales calculees (à partir des donnnees)
-        if method=='raies':
-            #plt.savefig('/Users/bremaud/Documents/rep_instru/donnees CTIO/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/coeff_sigmaO='+str(coeff_sigmaO)+'/demi_taille_maxO='+str(demi_taille_maxO)+'/deltaO='+str(deltaO)+'/coeff_sigma='+str(coeff_sigma)+'/demi_taille_max='+str(demi_taille_max)+'/delta='+str(delta)+'/image/transmission_instrumentale.pdf')
-            fichier=open('/Users/bremaud/Documents/rep_instru/donnees CTIO/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/coeff_sigmaO='+str(coeff_sigmaO)+'/demi_taille_maxO='+str(demi_taille_maxO)+'/deltaO='+str(deltaO)+'/coeff_sigma='+str(coeff_sigma)+'/demi_taille_max='+str(demi_taille_max)+'/delta='+str(delta)+'/texte/transmission_instrumentale.txt','w')
-            for i in range(len(rep_instru)):
-                fichier.write(str(new_lambda[i])+'\t'+str(rep_instru[i]/Max)+'\t'+str(new_err[i]/Max)+'\n')
-            fichier.close()
+        plt.show()
 
-        else:
-            #plt.savefig('/Users/bremaud/Documents/rep_instru/donnees CTIO/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/image/transmission_instrumentale12.pdf')
-            plt.show()
-            """
-            fichier=open('/Users/bremaud/Documents/rep_instru/donnees CTIO/'+disperseur+'/'+method+'/binwidth='+str(binwidth)+'/sigma='+str(sigma)+'/texte/transmission_instrumentale.txt','w')
-            for i in range(len(rep_instru)):
-                fichier.write(str(new_lambda[i])+'\t'+str(rep_instru[i]/Max)+'\t'+str(new_err[i]/Max)+'\n')
-            fichier.close()"""
 #CHECK
 
-reponse_instrumentale('convoluate',True,"\\Users\\Vincent\\Documents\\Stage J.Neveu\\Programmes et prod\\CTIODataJune2017 prod4",'HD111980','Ron400',sigma=5,binwidth=20)
+#reponse_instrumentale('raies',True,"/home/tp-home005/vbremau/StageM1/data_30may17_A2=0",'HD111980','Ron400')
+reponse_instrumentale('raies',True,r"\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\data_30may17_A2=0",'HD111980','Ron400')

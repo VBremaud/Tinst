@@ -85,7 +85,7 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
 
     "Recuperation des donnees du fichier spectre"
 
-    intensite_obs_savgol=sp.signal.savgol_filter(intensite_obs,filtre1_window-50,filtre1_order) #filtre savgol (enlève le bruit)
+    intensite_obs_savgol=sp.signal.savgol_filter(intensite_obs,11,filtre1_order) #filtre savgol (enlève le bruit)
     intensite_obs_1=sp.interpolate.interp1d(lambda_obs,intensite_obs_savgol,kind='cubic')
 
     lambda_complet=np.linspace(lambda_obs[0],lambda_obs[-1],int((lambda_obs[-1]-lambda_obs[0])*10+1)) #précison Angtrom

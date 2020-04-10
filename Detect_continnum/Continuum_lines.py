@@ -54,7 +54,7 @@ def smooth(x,window_len,window,sigma):
         return y
 
 
-def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\CTIODataJune2017 prod4\sim_20170530_060_spectrum.txt',nb_tour=1,CALSPEC=False,trigger=2,lambdamin=250,lambdamax=1150,filtre1_window=61,filtre1_order=3,moy_raies=10,demi_taille_max=40):
+def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\CTIODataJune2017 prod4\sim_20170530_060_spectrum.txt',nb_tour=1,CALSPEC=False,trigger=2,lambdamin=250,lambdamax=1150,filtre1_window=17,filtre1_order=3,moy_raies=10,demi_taille_max=40):
 
     s=open(fichier,'r')
     "importation des donnees"
