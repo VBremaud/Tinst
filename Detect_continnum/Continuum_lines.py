@@ -54,7 +54,7 @@ def smooth(x,window_len,window,sigma):
         return y
 
 
-def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\CTIODataJune2017 prod4\sim_20170530_060_spectrum.txt',nb_tour=1,CALSPEC=False,trigger=2,lambdamin=250,lambdamax=1150,filtre1_window=17,filtre1_order=3,moy_raies=10,demi_taille_max=40):
+def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\data_30may17_A2=0\reduc_20170530_060_spectrum.txt',nb_tour=2,CALSPEC=False,trigger=2.75,lambdamin=250,lambdamax=1150,filtre1_window=17,filtre1_order=3,moy_raies=10,demi_taille_max=40):
 
     s=open(fichier,'r')
     "importation des donnees"
@@ -153,6 +153,7 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
             D_sigma.append(np.std(moy))
 
             if D_intensite_obss[i]<D_mean[-1]-trigger*D_sigma[-1]:
+                print(lambda_complet[i])
                 k=i
                 while lambda_complet[k]-lambda_complet[i]<demi_taille_max and k<len(lambda_complet)-1:
                     k+=1
@@ -163,7 +164,10 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
                     if var_signe==1 and D_intensite_obss[j+1]-D_intensite_obss[j]<0:
                         break
 
-                    if D_intensite_obss[j]>D_mean[-1]+trigger*D_sigma[-1]:
+                    if D_intensite_obss[j]>D_mean[-1]+(trigger-2.25)*D_sigma[-1]:
+
+                        print(lambda_complet[i],lambda_complet[j])
+
                         if len(lambda_complet)-1>j+k-i:
                             indice=j+k-i
                         else:
@@ -176,7 +180,7 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
                             if var_signe==2 and D_intensite_obss[v+1]-D_intensite_obss[v]>0:
                                 var_signe=3
 
-                            if D_intensite_obss[v]<D_mean[-1]+trigger*D_sigma[-1]:
+                            if D_intensite_obss[v]<D_mean[-1]+(trigger-2.25)*D_sigma[-1]:
                                 indice=v
                                 break
 
@@ -216,12 +220,13 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
 
         for i in range(len(Raies)):
             if Raies[i]==False:
+                if lambda_complet[i]>972 or lambda_complet[i]<922:
 
-                intensite_coupe_obs.append(intensite_obss[i])
-                lambda_coupe_obs.append(lambda_complet[i])
-                D_intensite_coupe.append(D_intensite_obss[i])
+                    intensite_coupe_obs.append(intensite_obss[i])
+                    lambda_coupe_obs.append(lambda_complet[i])
+                    D_intensite_coupe.append(D_intensite_obss[i])
 
-        intensite_obsSpline=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs,bounds_error=False,fill_value="extrapolate")
+        intensite_obsSpline=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs,kind='cubic',bounds_error=False,fill_value="extrapolate")
 
 
         INTENSITE_OBS=intensite_obsSpline(lambda_complet)
@@ -233,6 +238,8 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
     plt.plot(lambda_complet,intensite_derivee(lambda_complet),c='blue')
     plt.plot(lambda_coupe_obs,D_intensite_coupe,' .',c='r')
     plt.plot(lambda_complet[:-1],D_mean,c='g')
+    plt.plot(lambda_complet[:-1],np.array(D_mean)+2.75*np.array(D_sigma),c='purple')
+    plt.plot(lambda_complet[:-1],np.array(D_mean)-2.75*np.array(D_sigma),c='purple')
     plt.xlabel('$\lambda$ (nm)',fontsize=20)
     plt.ylabel('dérivée',fontsize=20)
     plt.title("Spectre dérivée interpolé",fontsize=20)
@@ -264,6 +271,20 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
     plt.grid(True)
 
     plt.show()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
