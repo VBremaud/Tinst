@@ -14,7 +14,9 @@ import scipy as sp #calculs
 import statistics as sc #statistiques
 from scipy import misc
 
+
 ## Convolution
+
 
 
 def smooth(x,window_len,window,sigma=1):
@@ -26,6 +28,7 @@ def smooth(x,window_len,window,sigma=1):
         window_len: taille de la fenêtre de convolution
         window: fonction de convolution (hamming, blackman, hanning)
         sigma: ecart type de la gaussienne dans le cas d'une convolution par une gaussienne
+
     Sortie:
         y: tableau x convolue de même taille N
     """
@@ -53,7 +56,6 @@ def smooth(x,window_len,window,sigma=1):
 
 ## Evaluation de la transmission instrumentale
 
-
 def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1,window1,LAMBDA_MIN,LAMBDA_MAX,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window,filtre_global,order_global,debut_filtre_global,debord_raies,seuilEAU_1,seuilEAU_2,bord_droit,bord_gauche,filtre4avg_window):
 
     """Fonction: effectue la division en bin de longueur d'onde du spectre observe et le calcul de l'integrale
@@ -68,7 +70,6 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
 
     Entrees:
         6 params changeant au cours de l'extraction de Tinst:
-
         magabs: matrice A x B avec A le nombre de bin de longueur d'onde et B le nombre de photo utilise contenant
         la magnitude du spectre observe par bin de longueur d'onde pour chaque photo.
         magabs_err: matrice A x B des incertitudes type associee à magabs.
@@ -101,7 +102,7 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
         LAMBDA_MIN:
         LAMBDA_MAX:
         filtre4avg_window:
-
+        
     Sortie:
         rempli les tableaux magabs, magabs_err, airmass. (methode)"""
 
@@ -121,11 +122,13 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
                 intensite_obs.append(float(a[3]))
                 intensite_err.append(float(a[4]))
 
+
     if lambda_obs[-1]>Bin[-1] and lambda_obs[0]<Bin[0]:
         """si la plage de longueur d'onde du spectre observe est plus etroite que les valeurs max et min de la division
         en bin on ne prend pas en compte la photo et on passe à la suivante"""
 
         if method=='raies':
+
 
             intensite_obs_savgol=sp.signal.savgol_filter(intensite_obs,filtre1_window,filtre1_order) #filtre savgol (enlève le bruit)
             #filtre moy 2
@@ -209,11 +212,9 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
                             else:
                                 indice=len(lambda_complet)-moy_raies
                             for v in range(j,indice):
-
                                 if D_intensite_obss[v+1]-D_intensite_obss[v]<0:
                                     if var_signe==1:
                                         var_signe=2
-
                                     if var_signe==3:
                                         var_signe=4
 
@@ -236,6 +237,7 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
                                         Raies[i]=True
                                     i=indice+4
                                     Raies.append(False)
+
                             break
                 i+=1
 
@@ -266,7 +268,7 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
                         intensite_coupe_obs.append(intensite_obss[i])
                         lambda_coupe_obs.append(lambda_complet[i])
                         D_intensite_coupe.append(D_intensite_obss[i])
-
+                        
             intensite_obsSpline=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs,bounds_error=False,fill_value="extrapolate")
             INTENSITE_OBS=intensite_obsSpline(lambda_complet)
 
@@ -286,6 +288,7 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
             if DEBUG:
                 plt.figure(figsize=[6,6])
                 plt.axis([LAMBDA_MIN,LAMBDA_MAX,0,max(intensite_obs)*1.1])
+
                 plt.plot(lambda_obs,intensite_obs,c='r')
                 plt.plot(lambda_complet,INTENSITE_OBSS,c='black')
                 plt.xlabel('$\lambda$ (nm)')
@@ -296,8 +299,8 @@ def Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1
 
 
         elif method=='convoluate':
-
             intensite_obss=smooth(intensite_obs,6*sigma1,window1,sigma1)
+
             "convolution par une fenêtre (en general gaussienne)"
 
             interpolation_obs=interp1d(lambda_obs, intensite_obss)
@@ -383,6 +386,7 @@ def Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,
         binwidth: taille des bin de longueur d'onde.
         lambda_min: longueur d'onde minimum utilisee lors de la division en bin.
         lambda_max: longueur d'onde maximum utilisee lors de la division en bin.
+
         sigma_max:
         mag_diffmax:
         filtre2_order:
@@ -469,7 +473,9 @@ def Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,
 
                 j=0
                 for i in range(len(intensite_reel_1)):
+
                     if lambda_reel[i]>lambda_mid:
+
                         j=i
                         break
 
@@ -478,6 +484,7 @@ def Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,
                 intensite_reel_1=sp.interpolate.interp1d(lambda_reel,intensite_reel_1,kind='cubic')
 
                 lambda_complet=np.linspace(lambda_reel[0],lambda_reel[-1],int((lambda_reel[-1]-lambda_reel[0])*10+1)) #précision Angtrom
+
                 Intensite_reel=intensite_reel_1(lambda_complet)
 
                 intensite_tronque=[Intensite_reel[0]]
@@ -521,6 +528,7 @@ def Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,
                 if DEBUG:
                     plt.figure(figsize=[6,6])
                     plt.axis([LAMBDA_MIN,LAMBDA_MAX,0,max(intensite_reel)*1.1])
+
                     plt.plot(lambda_reel,intensite_reel,c='r')
                     plt.plot(lambda_complet,INTENSITE_reelS,c='black')
                     plt.xlabel('$\lambda$ (nm)')
@@ -555,6 +563,7 @@ def Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,
             print(name_data)
             s=open(list_spectrums[spec],'r')
             Plot_magabsorbe_bin(NAME,magabs,magabs_err,airmass,s,Bin,method,DEBUG,sigma1,window1,LAMBDA_MIN,LAMBDA_MAX,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window,filtre_global,order_global,debut_filtre_global,debord_raies,seuilEAU_1,seuilEAU_2,bord_droit,bord_gauche,filtre4avg_window)
+
 
         spec+=1
         s.close()
@@ -613,12 +622,15 @@ def Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,
 #CHECK
 
 
+
 def droites_Bouguer(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambda_max,sigma_max,mag_diffmax,filtre2_order,filtre3_order,filtre2avg_window,filtre2_window,filtre3avg_window,filtre3_window,lambda_mid,DEBUG,sigma1,window1,LAMBDA_MIN,LAMBDA_MAX,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window,filtre_global,order_global,debut_filtre_global,debord_raies,seuilEAU_1,seuilEAU_2,bord_droit,bord_gauche,filtre4avg_window):
+
 
     """Fonction: effectue pour toute les photos d'une même etoile, le trace de magabs par bin de longueur d'onde
 
     Entree:
         37 params utilent pour une fonction interne cf Plot_magabsorbe_star
+
 
     Sortie:
         Trace des droites de Bouguer.
@@ -628,6 +640,7 @@ def droites_Bouguer(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambd
 
     "Recuperation des tableaux renvoyes par Plot_magabsorbe_star"
     airmass, magabs, magabs_err, Bin, fluxlum_Binreel=Plot_magabsorbe_star(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambda_max,sigma_max,mag_diffmax,filtre2_order,filtre3_order,filtre2avg_window,filtre2_window,filtre3avg_window,filtre3_window,lambda_mid,DEBUG,sigma1,window1,LAMBDA_MIN,LAMBDA_MAX,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window,filtre_global,order_global,debut_filtre_global,debord_raies,seuilEAU_1,seuilEAU_2,bord_droit,bord_gauche,filtre4avg_window)
+
 
     "Definition de la fonction lineaire qu'on va utiliser pour tracer les droites de Bouguer."
     def f(x,a,b):
@@ -667,7 +680,9 @@ def droites_Bouguer(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambd
 #CHECK
 
 
+
 def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_len2=20,binwidth=20,lambda_min=350,lambda_max=1030,sigma_max=3,mag_diffmax=1,filtre2_order=3,filtre3_order=3,filtre2avg_window=10,filtre2_window=61,filtre3avg_window=50,filtre3_window=11,lambda_mid=475,DEBUG=False,sigma1=5,window1='gaussian',LAMBDA_MIN=350,LAMBDA_MAX=1099,trigger=2,filtre1_window=17,filtre1_order=3,moy_raies=10,demi_taille_max=40,filtre1avg_window=12,filtre_global=353,order_global=6,debut_filtre_global=350,debord_raies=3,seuilEAU_1=922,seuilEAU_2=972,bord_droit=980,bord_gauche=389,filtre4avg_window=40):
+
 
     """Fonction: trace la reponse instrumentale obtenue ainsi que celle de Sylvie, Augustion et Nick et enregistre les
     donnees dans des fichiers pdf (pour la reponse instrumentale) et txt cree à l'execution.
@@ -681,6 +696,7 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_le
 
         37 params utilent pour une fonction interne cf Plot_magabsorbe_star
 
+
     Sortie:
         Trace de la reponse instrumentale.
         Trace de celle de Sylvie, Nick et Augustin si il s'agit du disperseur Ronchie400.
@@ -688,6 +704,7 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_le
 
     "Recuperation des tableaux renvoyes par droites_Bouguer"
     coeff, Bin, err, fluxlum_Binreel=droites_Bouguer(method,sim,fileday,star,disperseur,binwidth,lambda_min,lambda_max,sigma_max,mag_diffmax,filtre2_order,filtre3_order,filtre2avg_window,filtre2_window,filtre3avg_window,filtre3_window,lambda_mid,DEBUG,sigma1,window1,LAMBDA_MIN,LAMBDA_MAX,trigger,filtre1_window,filtre1_order,moy_raies,demi_taille_max,filtre1avg_window,filtre_global,order_global,debut_filtre_global,debord_raies,seuilEAU_1,seuilEAU_2,bord_droit,bord_gauche,filtre4avg_window)
+
 
     """On calcul les tableaux rep_instru correspondant à la reponse instrumentale, new_err l'erreur associee et
     new_lambda la longueur d'onde associe à la reponse instrumentale."""
@@ -715,6 +732,7 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_le
 
     else:
         #Affichage rep instru comparees + atmosphère
+
         fig=plt.figure(figsize=[14,9])
         ax2 = fig.add_subplot(111)
 
@@ -780,8 +798,6 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_le
         simulee"""
         new_rep_ideal=np.zeros(len(lambda_sim)) #nouvelle valeur de la reponse ideale pour la même plage de longueur d'onde que rep simulation
 
-
-
         #Determination des indices de rep_Sylvie pour le calcul des ecarts relatifs
         for i in range(len(lambda_sim)):
             j=0
@@ -795,6 +811,7 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_le
 
         "Tableaux avec les ecarts relatifs"
         new_rep_ideal_norm=np.ones(len(new_rep_ideal))
+
         rep_sim_norm=(rep_sim/new_rep_ideal-1)*100
 
         zero=np.zeros(1000)
@@ -823,6 +840,7 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_le
 
         ax[1].yaxis.set_ticks(range(int(min(rep_sim_norm))-2,int(max(rep_sim_norm))+4,(int(max(rep_sim_norm))+6-int(min(rep_sim_norm)))//8))
         ax[1].text(550,max(rep_sim_norm)*3/4,'$\sigma$= '+str(X_2)[:4]+'%',color='black',fontsize=20)
+
         plt.subplots_adjust(wspace=0, hspace=0)
         plt.show()
 
@@ -845,3 +863,4 @@ def reponse_instrumentale(method,sim,fileday,star,disperseur,sigma2=10,window_le
 
 #reponse_instrumentale('raies',True,"/home/tp-home005/vbremau/StageM1/data_30may17_A2=0",'HD111980','Ron400')
 reponse_instrumentale('raies',False,r"\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\data_30may17_A2=0",'HD111980','HoloAmAg',DEBUG=True)
+
