@@ -282,3 +282,4 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
     plt.grid(True)
 
     plt.show()
+

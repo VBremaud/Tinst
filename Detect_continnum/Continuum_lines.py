@@ -19,6 +19,7 @@ from scipy.interpolate import interp1d #interpolation
 from scipy import integrate #integation
 import scipy as sp #calculs
 import statistics as sc #statistiques
+from scipy import misc
 
 ## Convolution
 
@@ -54,7 +55,7 @@ def smooth(x,window_len,window,sigma):
         return y
 
 
-def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\data_30may17_A2=0\reduc_20170530_060_spectrum.txt',nb_tour=2,CALSPEC=False,trigger=2.75,lambdamin=250,lambdamax=1150,filtre1_window=17,filtre1_order=3,moy_raies=10,demi_taille_max=40):
+def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Programmes et prod\data_30may17_A2=0\reduc_20170530_075_spectrum.txt',nb_tour=1,CALSPEC=False,trigger=2,lambdamin=250,lambdamax=1150,filtre1_window=11,filtre1_order=3,moy_raies=10,demi_taille_max=40):
 
     s=open(fichier,'r')
     "importation des donnees"
@@ -86,14 +87,37 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
     "Recuperation des donnees du fichier spectre"
 
     intensite_obs_savgol=sp.signal.savgol_filter(intensite_obs,filtre1_window,filtre1_order) #filtre savgol (enlève le bruit)
+    intensite_obs_savgol=smooth(intensite_obs_savgol,7,'flat',1)
+
     intensite_obs_savgol1=sp.interpolate.interp1d(lambda_obs,intensite_obs_savgol,kind='quadratic')
 
-    intensite_obs_1=sp.interpolate.interp1d(lambda_obs,intensite_obs,kind='quadratic')
+    for i in range(len(lambda_obs)):
+        if lambda_obs[i]>350:
+            k=i
+            break
+
+    intensite_obs_savgol2=sp.signal.savgol_filter(intensite_obs[k:],353,6)
+
+    intensite_obs_sagol_3=sp.interpolate.interp1d(lambda_obs[k:],intensite_obs_savgol2,kind='quadratic',bounds_error=False,fill_value="extrapolate")
+
+    fig=plt.figure(figsize=[15,10])
+    plt.axis([300,1100,0,max(intensite_obs)*1.1])
+    plt.plot(lambda_obs[k:],intensite_obs_savgol2,c='b')
+    plt.plot(lambda_obs,intensite_obs,c='r')
+
+    plt.xlabel('$\lambda$ (nm)')
+    plt.ylabel('u.a')
+    plt.title('spectre observe final')
+    plt.grid(True)
+    plt.show()
+
+    lambda_complet=np.linspace(lambda_obs[0],lambda_obs[-1],int((lambda_obs[-1]-lambda_obs[0])*10+1)) #précison Angtrom
 
     INTENSITE_OBSS=intensite_obs_savgol
 
     for z in range(nb_tour):
         print(z)
+
         intensite_obss=INTENSITE_OBSS
 
         if z==0:
@@ -105,82 +129,83 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
             D_intensite_obss.append(0)
 
             intensite_derivee=sp.interpolate.interp1d(lambda_obs,D_intensite_obss)
-            lambda_complet=np.linspace(lambda_obs[0],lambda_obs[-1],int((lambda_obs[-1]-lambda_obs[0])*10+1)) #précison Angtrom
 
-            Intensite_obs_corr=[intensite_obss[0]]
-
-            for i in range(len(lambda_complet)-1):
-                Intensite_obs_corr.append(sp.integrate.quad(intensite_derivee,lambda_complet[i],lambda_complet[i+1])[0]+Intensite_obs_corr[-1])
-
-            intensite_obss=Intensite_obs_corr #nouvelles données avec un "étalonnage" plus précis.
-            D_intensite_obss=intensite_derivee(lambda_complet)
-
-            Intensite_obs_savgol=intensite_obs_savgol1(lambda_complet)
+            intensite_obss=intensite_obs_savgol1(lambda_complet)
 
         else:
-
-            D_intensite_obss=[0]
+            D_intensite_obss=[(intensite_obss[1]-intensite_obss[0])/(lambda_complet[1]-lambda_complet[0])]
             for i in range(1,len(intensite_obss)-1):
                 D_intensite_obss.append((intensite_obss[i+1]-intensite_obss[i-1])/(lambda_complet[i+1]-lambda_complet[i-1]))
 
             D_intensite_obss.append(0)
-
+            print(len(lambda_complet),len(intensite_obss))
             intensite_derivee=sp.interpolate.interp1d(lambda_complet,D_intensite_obss)
 
+        D_intensite_obss=intensite_derivee(lambda_complet)
 
-        D_mean=[]
+        D_mean=misc.derivative(intensite_obs_sagol_3,lambda_complet[10:-10])
+
+        S=np.std(D_mean[:50])
         D_sigma=[]
+        for i in range(50):
+            D_sigma.append(S)
+
+        for i in range(50,len(D_mean)-50):
+            D_sigma.append(np.std(D_mean[i-50:i+50]))
+
+        for i in range(len(D_mean)-50,len(D_mean)):
+            D_sigma.append(np.std(D_mean[-50:]))
+
         Raies=[]
+        Raies+=[False,False,False,False,False,False,False,False,False]
 
-        for i in range(moy_raies*10):
-            Raies.append(False)
-            D_mean.append(np.mean(intensite_obss[:moy_raies*10]))
-            D_sigma.append(np.std(intensite_obss[:moy_raies*10]))
-
-        #sur les moy_raies derniers nanomètres (par défaut 10)
-
-        i=moy_raies*10
-        while i<len(D_intensite_obss)-1:
+        i=10
+        while i<len(D_intensite_obss)-10:
             var_signe=0
-            moy=[]
-            j=1
             Raies.append(False)
-            while len(moy)!=moy_raies*10:
-                if Raies[i-j]==False:
-                    moy.append(D_intensite_obss[i-j])
-                j+=1
-            D_mean.append(np.mean(moy))
-            D_sigma.append(np.std(moy))
 
-            if D_intensite_obss[i]<D_mean[-1]-trigger*D_sigma[-1]:
-                print(lambda_complet[i])
+            if D_intensite_obss[i]<D_mean[i-10]-trigger*D_sigma[i-10]:
+
                 k=i
-                while lambda_complet[k]-lambda_complet[i]<demi_taille_max and k<len(lambda_complet)-1:
+                while lambda_complet[k]-lambda_complet[i]<demi_taille_max and k<len(lambda_complet)-10:
                     k+=1
 
                 for j in range(i,k):
-                    if D_intensite_obss[j+1]-D_intensite_obss[j]>0:
+                    if D_intensite_obss[j+1]-D_intensite_obss[j]>0 and var_signe==0:
                         var_signe=1
+
                     if var_signe==1 and D_intensite_obss[j+1]-D_intensite_obss[j]<0:
+                        var_signe=2
+
+                    if var_signe==2 and D_intensite_obss[j+1]-D_intensite_obss[j]>0:
+                        var_signe=3
+
+                    if var_signe==3 and D_intensite_obss[j+1]-D_intensite_obss[j]<0:
                         break
 
-                    if D_intensite_obss[j]>D_mean[-1]+(trigger-2.25)*D_sigma[-1]:
+                    if D_intensite_obss[j]>D_mean[j-10]+trigger*D_sigma[j-10]:
 
-                        print(lambda_complet[i],lambda_complet[j])
-
-                        if len(lambda_complet)-1>j+k-i:
+                        if len(lambda_complet)-10>j+k-i:
                             indice=j+k-i
                         else:
-                            indice=len(lambda_complet)-1
+                            indice=len(lambda_complet)-10
                         for v in range(j,indice):
+
                             if D_intensite_obss[v+1]-D_intensite_obss[v]<0:
                                 if var_signe==1:
                                     var_signe=2
 
-                            if var_signe==2 and D_intensite_obss[v+1]-D_intensite_obss[v]>0:
-                                var_signe=3
+                                if var_signe==3:
+                                    var_signe=4
 
-                            if D_intensite_obss[v]<D_mean[-1]+(trigger-2.25)*D_sigma[-1]:
+                            if D_intensite_obss[v+1]-D_intensite_obss[v]>0:
+                                if var_signe==2:
+                                    var_signe=3
+
+                                if var_signe==4:
+                                    break
+
+                            if D_intensite_obss[v]<D_mean[v-10]+trigger*D_sigma[v-10]:
                                 indice=v
                                 break
 
@@ -188,14 +213,10 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
                             if var_signe==2 or var_signe==4:
                                 for loop in range(i+1,indice+4):
                                     Raies.append(True)
-                                    D_mean.append(np.mean(moy))
-                                    D_sigma.append(np.std(moy))
                                 for loop in range(i-4,i+1):
                                     Raies[i]=True
                                 i=indice+4
                                 Raies.append(False)
-                                D_mean.append(np.mean(moy))
-                                D_sigma.append(np.std(moy))
                         break
             i+=1
 
@@ -203,6 +224,10 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
         lambda_coupe_obs=[]
         D_intensite_coupe=[]
 
+        Raies+=[False,False,False,False,False,False]
+
+        print(len(Raies))
+        print(len(lambda_complet))
         for i in range(10,len(Raies)):
             if Raies[i]==False:
                 stop=0
@@ -214,32 +239,43 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
                         if Raies[j]==True:
                             stop=2
                 if stop==2:
-                    print('ok')
                     print(lambda_complet[i])
                     Raies[i]=True
 
         for i in range(len(Raies)):
             if Raies[i]==False:
                 if lambda_complet[i]>972 or lambda_complet[i]<922:
-
                     intensite_coupe_obs.append(intensite_obss[i])
                     lambda_coupe_obs.append(lambda_complet[i])
                     D_intensite_coupe.append(D_intensite_obss[i])
 
-        intensite_obsSpline=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs,kind='cubic',bounds_error=False,fill_value="extrapolate")
+        if len(Raies)<len(lambda_complet):
+            for i in range(len(Raies),len(lambda_complet)):
+                intensite_coupe_obs.append(intensite_obss[i])
+                lambda_coupe_obs.append(lambda_complet[i])
+                D_intensite_coupe.append(D_intensite_obss[i])
+
+        intensite_obsSpline=sp.interpolate.interp1d(lambda_coupe_obs,intensite_coupe_obs)
 
 
         INTENSITE_OBS=intensite_obsSpline(lambda_complet)
-        INTENSITE_OBSS=smooth(INTENSITE_OBS,95,'flat',1)
 
-    Intensite_obs=intensite_obs_1(lambda_complet)
+        for j in range(len(lambda_complet)):
+            if intensite_obs_savgol1(lambda_complet)[j]>INTENSITE_OBS[j]:
+                INTENSITE_OBS[j]=intensite_obs_savgol1(lambda_complet)[j]
+            if lambda_complet[j]<385:
+                INTENSITE_OBS[j]=intensite_obs_savgol1(lambda_complet)[j]
+
+        print(len(INTENSITE_OBS))
+        INTENSITE_OBSS=smooth(INTENSITE_OBS,40,'flat',1)
+
     fig=plt.figure(figsize=[15,10])
     plt.axis([300,1100,min(D_intensite_obss)*1.1,max(D_intensite_obss)*1.1])
     plt.plot(lambda_complet,intensite_derivee(lambda_complet),c='blue')
     plt.plot(lambda_coupe_obs,D_intensite_coupe,' .',c='r')
-    plt.plot(lambda_complet[:-1],D_mean,c='g')
-    plt.plot(lambda_complet[:-1],np.array(D_mean)+2.75*np.array(D_sigma),c='purple')
-    plt.plot(lambda_complet[:-1],np.array(D_mean)-2.75*np.array(D_sigma),c='purple')
+    plt.plot(lambda_complet[10:-10],D_mean,c='g')
+    plt.plot(lambda_complet[10:-10],np.array(D_mean)+trigger*np.array(D_sigma),c='purple')
+    plt.plot(lambda_complet[10:-10],np.array(D_mean)-trigger*np.array(D_sigma),c='purple')
     plt.xlabel('$\lambda$ (nm)',fontsize=20)
     plt.ylabel('dérivée',fontsize=20)
     plt.title("Spectre dérivée interpolé",fontsize=20)
@@ -251,40 +287,17 @@ def plot_detection_raies(fichier=r'\Users\Vincent\Documents\Stage J.Neveu\Progra
 
     fig=plt.figure(figsize=[15,10])
     plt.axis([300,1100,0,max(intensite_obs)*1.1])
-    plt.plot(lambda_complet,Intensite_obs_corr,c='g')
+
     plt.plot(lambda_obs,intensite_obs,c='r')
-    plt.plot(lambda_complet,Intensite_obs_savgol,c='orange')
     plt.plot(lambda_complet,INTENSITE_OBSS,c='black',linestyle='--')
-    plt.plot(lambda_obs,intensite_obs_savgol,color='blue',label='spectre observe')
+    plt.plot(lambda_complet,intensite_obs_savgol1(lambda_complet),c='g')
     plt.xlabel('$\lambda$ (nm)')
     plt.ylabel('u.a')
     plt.title('spectre observe final')
     plt.grid(True)
 
-    Diff=np.array(INTENSITE_OBSS)-np.array(Intensite_obs)
-    fig=plt.figure(figsize=[15,10])
-    plt.axis([300,1100,min(Diff)*1.1,max(Diff)*1.1])
-    plt.plot(lambda_complet,Diff,c='black')
-    plt.xlabel('$\lambda$ (nm)')
-    plt.ylabel('u.a')
-    plt.title('différence filtre')
-    plt.grid(True)
 
     plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
